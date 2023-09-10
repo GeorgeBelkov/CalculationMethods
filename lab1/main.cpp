@@ -17,4 +17,8 @@ int main()
     D.output();
     D.transpoce();
     D.output();
+    // A.addRow(2, 1, 1, 2);
+    // A.output();
+    A.addRow(2, 1, 1, 2);
+    A.output();
 }

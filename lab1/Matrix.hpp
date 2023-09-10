@@ -11,51 +11,19 @@ class Matrix
 {
 private:
     std::vector<std::vector<T>> matrix;
-
     // Заполнение матрицы
     void fill(std::filesystem::path& filename);
 
 public:
     ~Matrix() = default;
+
+    // Конструкторы
     Matrix(size_t n, size_t m, std::filesystem::path filename);
     Matrix(size_t n, size_t m);
+    Matrix(Matrix<T>& other);
 
-    // Конструктор копирования и оператор присваивания
-    Matrix(Matrix& other);
-    Matrix& operator=(Matrix& other)
-    {
-        bool is_different;
-        int counter = 0;
-        for (size_t i = 0; i < this->matrix.size(); i++)
-        {
-            if (this->matrix[i] == other.matrix[i])
-            {
-                counter++;
-            }
-        }
-
-        if (counter == this->matrix.size())
-            is_different = false;
-        else
-            is_different = true;
-
-
-        if (is_different &&
-            this->matrix.size() == other.matrix.size() &&
-            this->matrix[0].size() == other.matrix[0].size())
-        {
-            for (size_t i = 0; i < this->matrix.size(); i++)
-            {
-                this->matrix[i].clear();
-                this->matrix[i] = other.matrix[i];
-            }
-        }
-        else
-            std::cout << "They are not different!!!\n\n";
-        
-        return *this;
-    }
-
+    // Оператор присваивания
+    Matrix<T>& operator=(Matrix<T>& other);
     // Перегрузка операторов
     std::vector<T>& operator[](size_t index);
 
@@ -68,32 +36,16 @@ public:
     T scalarMul(std::vector<T>& first, std::vector<T>& second);
     void transpoce();
     // Дописать
-    // void addRow(int, int, uint, uint);
+    // void addRow(int dest_id, int src_id, uint koeff1, uint koeff2);
 
 
-    friend Matrix<T> multiply(Matrix<T>& A, Matrix<T>& B)
-    {
-        if (A.matrix[0].size() == B.matrix.size())
-        {
-            Matrix C(A.matrix.size(), B.matrix[0].size());
-            for (size_t i = 0; i < C.matrix.size(); i++)
-                for (size_t j = 0; j < C.matrix[0].size(); j++)
-                {
-                    auto column = B.getColumn(j);
-                    C.matrix[i][j] = C.scalarMul(A[i], column);
-                }
-
-            return C;
-        }
-        else
-        {
-            std::cout << "dimentions of A and B are different!\n\n";
-            exit(1);
-        }
-    }
+    // Дружественные фунции
+    template<typename V>
+    friend Matrix<V> multiply(Matrix<V>& A, Matrix<V>& B);
 };
 
 
+// Полная специализация шаблонного метода fill для типа float
 template<>
 void Matrix<float>::fill(std::filesystem::path& filename)
 {
@@ -114,6 +66,7 @@ void Matrix<float>::fill(std::filesystem::path& filename)
 }
 
 
+// Полная специализация шаблонного метода fill для типа double
 template<>
 void Matrix<double>::fill(std::filesystem::path& filename)
 {
@@ -133,6 +86,7 @@ void Matrix<double>::fill(std::filesystem::path& filename)
 }
 
 
+// Конструктор. Заполняет матрицу значениями из файла.
 template<typename T>
 Matrix<T>::Matrix(size_t n, size_t m, std::filesystem::path filename)
 {
@@ -146,6 +100,7 @@ Matrix<T>::Matrix(size_t n, size_t m, std::filesystem::path filename)
 }
 
 
+// Конструктор "по умолчанию". В матрице нет значений.
 template<typename T>
 Matrix<T>::Matrix(size_t n, size_t m)
 {
@@ -158,6 +113,7 @@ Matrix<T>::Matrix(size_t n, size_t m)
 }
 
 
+// Конструктор копирования
 template<typename T>
 Matrix<T>::Matrix(Matrix& other)
 {
@@ -169,6 +125,7 @@ Matrix<T>::Matrix(Matrix& other)
 }
 
 
+// Вывод матрицы в консоль.
 template<typename T>
 void Matrix<T>::output()
 {
@@ -182,6 +139,7 @@ void Matrix<T>::output()
 }
 
 
+// Дает возможность получать строку матрицы A, как A[i], i - индекс строки.
 template<typename T>
 std::vector<T>& Matrix<T>::operator[](size_t index)
 {
@@ -194,6 +152,8 @@ std::vector<T>& Matrix<T>::operator[](size_t index)
     }
 }
 
+
+// Скалярное умножение
 template<typename T>
 T Matrix<T>::scalarMul(std::vector<T>& first, std::vector<T>& second)
 {
@@ -206,6 +166,7 @@ T Matrix<T>::scalarMul(std::vector<T>& first, std::vector<T>& second)
 }
 
 
+// Возвращает столбец матрицы с индексом - index.
 template<typename T>
 std::vector<T> Matrix<T>::getColumn(size_t index)
 {
@@ -225,6 +186,7 @@ std::vector<T> Matrix<T>::getColumn(size_t index)
 }
 
 
+// Транспонирует матрицу. B.transpoce() => B^(T)
 template<typename T>
 void Matrix<T>::transpoce()
 {
@@ -237,4 +199,67 @@ void Matrix<T>::transpoce()
     for (size_t i = 0; i < temp.size(); i++)
         for (size_t j = 0; j < temp[0].size(); j++)
             matrix[i][j] = temp[j][i];
+}
+
+
+// Оператор присваивания.
+template<typename T>
+Matrix<T>& Matrix<T>::operator=(Matrix& other)
+{
+    bool is_different;
+    int counter = 0;
+    for (size_t i = 0; i < this->matrix.size(); i++)
+    {
+        if (this->matrix[i] == other.matrix[i])
+            counter++;
+    }
+
+    if (counter == this->matrix.size())
+        is_different = false;
+    else
+        is_different = true;
+
+
+    if (is_different &&
+        this->matrix.size() == other.matrix.size() &&
+        this->matrix[0].size() == other.matrix[0].size())
+    {
+        for (size_t i = 0; i < this->matrix.size(); i++)
+        {
+            this->matrix[i].clear();
+            this->matrix[i] = other.matrix[i];
+        }
+    }
+    else
+        std::cout << "They are not different!!!\n\n";
+    
+    return *this;
+}
+
+
+
+// Дружественные функции - реализация
+
+
+
+// Умножение матриц
+template<typename V>
+Matrix<V> multiply(Matrix<V>& A, Matrix<V>& B)
+{
+    if (A.matrix[0].size() == B.matrix.size())
+    {
+        Matrix<V> C(A.matrix.size(), B.matrix[0].size());
+        for (size_t i = 0; i < C.matrix.size(); i++)
+            for (size_t j = 0; j < C.matrix[0].size(); j++)
+            {
+                auto column = B.getColumn(j);
+                C.matrix[i][j] = C.scalarMul(A[i], column);
+            }
+        return C;
+    }
+    else
+    {
+        std::cout << "dimentions of A and B are different!\n\n";
+        exit(1);
+    }
 }
