@@ -35,13 +35,16 @@ public:
     std::vector<T> getColumn(size_t index);
     T scalarMul(std::vector<T>& first, std::vector<T>& second);
     void transpoce();
-    // Дописать
-    // void addRow(int dest_id, int src_id, uint koeff1, uint koeff2);
+    void mulRowAndScalar(size_t row_id, double scalar);
+    void addRow(size_t src, size_t dest);
 
 
     // Дружественные фунции
     template<typename V>
     friend Matrix<V> multiply(Matrix<V>& A, Matrix<V>& B);
+
+    template<typename V>
+    friend Matrix<V> makeE(size_t n);
 };
 
 
@@ -166,6 +169,34 @@ T Matrix<T>::scalarMul(std::vector<T>& first, std::vector<T>& second)
 }
 
 
+// Умножение строки на скаляр.
+template<typename T>
+void Matrix<T>::mulRowAndScalar(size_t row_id, double scalar)
+{
+    row_id -= 1;
+    for (auto& elem : matrix[row_id])
+        elem *= scalar;
+}
+
+
+// Сложение строк (внутри матрицы)
+template<typename T>
+void Matrix<T>::addRow(size_t src, size_t dest)
+{
+    if (src == 0 or dest == 0)
+    {
+        std::cout << "Matrix hasn`t got zero row or column!";
+        exit(1);
+    }
+    
+    auto& source = matrix[src - 1];
+    auto& destination = matrix[dest - 1];
+    for (size_t i = 0; i < source.size(); i++)
+        destination[i] += source[i];
+}
+
+
+
 // Возвращает столбец матрицы с индексом - index.
 template<typename T>
 std::vector<T> Matrix<T>::getColumn(size_t index)
@@ -262,4 +293,15 @@ Matrix<V> multiply(Matrix<V>& A, Matrix<V>& B)
         std::cout << "dimentions of A and B are different!\n\n";
         exit(1);
     }
+}
+
+template<typename V>
+Matrix<V> makeE(size_t n)
+{
+    Matrix<V> E(n,n);
+    for (size_t i = 0; i < E.matrix.size(); i++)
+    {
+        E.matrix[i][i] = 1;
+    }
+    return E;
 }

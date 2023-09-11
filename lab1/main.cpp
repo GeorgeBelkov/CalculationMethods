@@ -3,8 +3,8 @@
 
 int main()
 {
-    Matrix<double> A(3, 3, "/home/george/Desktop/Projects/C++/CalculationMethods/lab1/matrixA.txt");
-    Matrix<double> C(3, 3, "/home/george/Desktop/Projects/C++/CalculationMethods/lab1/matrixC.txt");
+    Matrix<double> A(3, 3, "/home/ysan/numer/CalculationMethods/lab1/matrixA.txt");
+    Matrix<double> C(3, 3, "/home/ysan/numer/CalculationMethods/lab1/matrixC.txt");
     A.output();
     Matrix<double> B = A;
     B.output();
@@ -17,8 +17,10 @@ int main()
     D.output();
     D.transpoce();
     D.output();
-    // A.addRow(2, 1, 1, 2);
-    // A.output();
-    A.addRow(2, 1, 1, 2);
-    A.output();
+    Matrix<double> E = makeE<double>(4);
+    E.output();
+    C.mulRowAndScalar(1, 3);
+    C.output();
+    C.addRow(1, 2);
+    C.output();
 }
