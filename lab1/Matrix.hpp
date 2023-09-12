@@ -50,10 +50,10 @@ public:
     friend Matrix<V> makeE(size_t n);
 
     template<typename V>
-    Matrix<K> makeRot(size_t num1, size_t num2, Matrix<K>& mat);
+    Matrix<V> makeRot(size_t num1, size_t num2, Matrix<V>& mat);
 
     template<typename V>
-    friend void QR(Matrix<K>& A,Matrix<K>& Q, Matrix<K>& R);
+    friend void QR(Matrix<V>& A,Matrix<V>& Q, Matrix<V>& R);
 };
 
 
