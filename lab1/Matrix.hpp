@@ -30,14 +30,17 @@ public:
     // Геттеры и Сеттеры
     std::vector<std::vector<T>>& getMatrix() { return matrix; }
 
-    // Методы класса
+    // Вспомогательные методы класса
     void output();
-    std::vector<T> getColumn(size_t index);
+    std::vector<T> getColumn(size_t index, size_t first_row_id = 0);
     T scalarMul(std::vector<T>& first, std::vector<T>& second);
     void transpoce();
     void mulRowAndScalar(size_t row_id, double scalar);
     void addRow(size_t src, size_t dest);
-
+    std::pair<Matrix<T>, Matrix<T>> divideExtendedMatrix();
+    // Методы по заданию
+    bool forwardGaussStep();
+    Matrix<T> backwardGaussStep();
 
     // Дружественные фунции
     template<typename V>
@@ -135,7 +138,7 @@ void Matrix<T>::output()
     for (auto& row : matrix)
     {
         for (T elem : row)
-            std::cout << elem << " ";
+            std::cout << elem << "\t";
         std::cout << "\n";
     }
     std::cout << std::setprecision(7) << std::endl;
@@ -173,7 +176,6 @@ T Matrix<T>::scalarMul(std::vector<T>& first, std::vector<T>& second)
 template<typename T>
 void Matrix<T>::mulRowAndScalar(size_t row_id, double scalar)
 {
-    row_id -= 1;
     for (auto& elem : matrix[row_id])
         elem *= scalar;
 }
@@ -183,35 +185,140 @@ void Matrix<T>::mulRowAndScalar(size_t row_id, double scalar)
 template<typename T>
 void Matrix<T>::addRow(size_t src, size_t dest)
 {
-    if (src == 0 or dest == 0)
+    if (src < 0 or dest < 0)
     {
-        std::cout << "Matrix hasn`t got zero row or column!";
+        std::cout << "Matrix hasn`t got below zero row or column!";
         exit(1);
     }
     
-    auto& source = matrix[src - 1];
-    auto& destination = matrix[dest - 1];
+    auto& source = matrix[src];
+    auto& destination = matrix[dest];
     for (size_t i = 0; i < source.size(); i++)
         destination[i] += source[i];
 }
 
 
+// Прямой ход Метода Гаусса
+template<typename T>
+bool Matrix<T>::forwardGaussStep()
+{
+    static double epsilon = 1e-10;
+    size_t step = 0;
+    size_t matrix_order = this->matrix.size();
+    while (step < matrix_order)
+    {
+        auto column = this->getColumn(step, step);
+        // Если "ведущий" элемент 0
+        if (std::abs(column[0] - 0) < epsilon)
+        {
+            // Идем циклом по столбцу от [i][i] до [i][matrix_order]
+            // Ищем ненулевой элемент
+            for (size_t i = 0; i < column.size(); i++)
+            {
+                // Нашли
+                if (std::abs(column[i] - 0) > epsilon)
+                {
+                    std::swap(this->operator[](step), this->operator[](step + i));
+                    break;
+                }
+                // Не нашли --> выходим из функции
+                if (i == column.size() - 1)
+                {
+                    std::cout << "Matrix determinate is zero!\n\n";
+                    return true;
+                }
+            }
+        }
+        // Иначе
+        else
+        {
+            T max = std::abs(column[0]);
+            size_t iter = step;
+            for (size_t i = 1; i < column.size(); i++)
+            {
+                if (std::abs(column[i]) > max)
+                {
+                    max = std::abs(column[i]);
+                    iter = step + i;
+                }
+            }
+            if (iter != step)
+                std::swap(this->operator[](step), this->operator[](iter));
+            
+            
+            // Складываем каждую нижележащую строку с первой умноженной на [i][step] / [step][step]
+            for (size_t i = step + 1; i < matrix_order; i++)
+            {
+
+                std::vector<T> row_copy = this->operator[](step);
+
+                if (this->matrix[i][step] == 0)
+                    continue;
+                T value = this->matrix[i][step] / this->matrix[step][step];
+
+                this->mulRowAndScalar(step, -value);
+                this->addRow(step, i);
+                std::swap(row_copy, this->operator[](step));
+            }
+        }
+        ++step;
+    }
+    return false;
+}
+
+
+// Обратный ход Метода Гаусса
+template<typename T>
+Matrix<T> Matrix<T>::backwardGaussStep()
+{
+    Matrix<T> Answer(this->matrix.size(), 1);
+    for (size_t i = this->matrix.size() - 1; i >= 0; i--)
+    {
+        T sum = 0, b = this->matrix[i][matrix[0].size() - 1];
+        for (size_t j = i + 1; j < this->matrix.size(); j++)
+            sum += (this->matrix[i][j] * Answer[j][0]);
+        Answer[i][0] = (b - sum) / this->matrix[i][i];
+
+        if (i == 0) break;
+    }
+    return Answer;
+}
+
+
+// Возвращает пару матриц - матрицу коэффицентов и свободных членов
+template<typename T>
+std::pair<Matrix<T>, Matrix<T>> Matrix<T>::divideExtendedMatrix()
+{
+    Matrix<T> left(this->matrix.size(), this->matrix[0].size() - 1);
+    Matrix<T> right(this->matrix.size(), 1);
+    for (size_t i = 0; i < this->matrix.size(); i++)
+    {
+        for (size_t j = 0; j < this->matrix[0].size(); j++)
+        {
+            (j == this->matrix[0].size() - 1) ?
+            right[i][0] = this->matrix[i][j] :
+            left.matrix[i][j] = this->matrix[i][j];
+        }
+    }
+    return std::make_pair(left, right);
+}
+
 
 // Возвращает столбец матрицы с индексом - index.
 template<typename T>
-std::vector<T> Matrix<T>::getColumn(size_t index)
+std::vector<T> Matrix<T>::getColumn(size_t index, size_t first_row_id)
 {
-    if (index < matrix[0].size())
+    if (index < matrix[0].size() && first_row_id < matrix.size() && first_row_id >= 0)
     {
         std::vector<T> column;
         column.reserve(matrix.size());
-        for (size_t i = 0; i < matrix.size(); i++)
-            column.push_back(matrix[i][index]);
+        for (; first_row_id < matrix.size(); first_row_id++)
+            column.push_back(matrix[first_row_id][index]);
         return column;
     }
     else
     {
-        std::cout << "index of column out of range!\n\n";
+        std::cout << "index of column or first_row_id out of range!\n\n";
         exit(1);
     }
 }
