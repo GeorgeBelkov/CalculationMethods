@@ -48,6 +48,12 @@ public:
 
     template<typename V>
     friend Matrix<V> makeE(size_t n);
+
+    template<typename V>
+    friend Matrix<V> multiply(Matrix<V>& A, Matrix<V>& B);
+
+    template<typename V>
+    friend void QR(Matrix<K>& A,Matrix<K>& Q, Matrix<K>& R)
 };
 
 
@@ -411,4 +417,46 @@ Matrix<V> makeE(size_t n)
         E.matrix[i][i] = 1;
     }
     return E;
+}
+
+template<typename K>
+Matrix<K> makeRot(size_t num1, size_t num2, Matrix<K>& mat)
+{
+    size_t n = mat.matrix.size();
+    Matrix<K> Rot = makeE<K>(n);
+    K c1 = mat[num1][num1]/sqrt(pow(mat[num1][num1],2) + pow(mat[num2][num1],2));
+    K c2 = mat[num2][num1]/sqrt(pow(mat[num1][num1],2) + pow(mat[num2][num1],2));
+    Rot.matrix[num1][num1] = c1;
+    Rot.matrix[num1][num2] = c2;
+    Rot.matrix[num2][num1] = -c2;
+    Rot.matrix[num2][num2] = c1;
+    return Rot;
+}
+
+
+//QR РАЗЛОЖЕНИЕ!!!!!
+template<typename K>
+void QR(Matrix<K>& A,Matrix<K>& Q, Matrix<K>& R)
+{ 
+  size_t n = A.matrix.size();
+  Matrix<K> Q1 = makeE<K>(n);
+  Matrix<K> A_ = A;
+  for(size_t i = 0; i < n - 1; i++)
+    for(size_t j = i + 1; j < n; j++)
+      {
+        Matrix<K> Q2 = makeRot<K>(i,j,A_);
+        Matrix<K> Temp = multiply<K>(Q2,Q1);
+        Q1 = Temp;
+        Matrix<K> Temp1 = multiply<K>(Q2,A_);
+        A_ = Temp1; 
+      }
+  R = A_;
+  Q1.transpoce();
+  Q = Q1;
+  Q1.transpoce();
+  
+/*
+далее нужно сделать обратный ход метода Гаусса для системы Qx = b. Пусть решение x' (решается x' = QT*b)
+далее нужно решить Rx = x'. Это делается обратным ходом метода Гаусса. 
+*/
 }
