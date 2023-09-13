@@ -4,6 +4,8 @@
 #include <iostream>
 #include <filesystem>
 #include <algorithm>
+#include <cmath>
+#include <fstream>
 
 
 template<typename T>
@@ -26,23 +28,39 @@ public:
     Matrix<T>& operator=(Matrix<T>& other);
     // Перегрузка операторов
     std::vector<T>& operator[](size_t index);
-
+    Matrix<T> operator+(Matrix<T>& B);
+    Matrix<T> operator-(Matrix<T>& B);
     // Геттеры и Сеттеры
     std::vector<std::vector<T>>& getMatrix() { return matrix; }
 
     // Вспомогательные методы класса
-    void output();
+    void output(std::ofstream& fout);
     std::vector<T> getColumn(size_t index, size_t first_row_id = 0);
     T scalarMul(std::vector<T>& first, std::vector<T>& second);
     void transpoce();
     void mulRowAndScalar(size_t row_id, double scalar);
     void addRow(size_t src, size_t dest);
     std::pair<Matrix<T>, Matrix<T>> divideExtendedMatrix();
+    Matrix<T> Unv();
+    std::pair<T,T> Cond();
     // Методы по заданию
     bool forwardGaussStep();
     Matrix<T> backwardGaussStep();
 
     // Дружественные фунции
+
+    template<typename K>
+    friend K eqlidNorm(Matrix<K> a);
+
+    template<typename V>
+    friend V Norm1(Matrix<V> a);
+    
+    template<typename V>
+    friend V Norm2(Matrix<V> a);
+
+    template<typename V>
+    friend Matrix<V> makeExtendedMatrix(Matrix<V>& A, Matrix<V>& b);
+
     template<typename V>
     friend Matrix<V> multiply(Matrix<V>& A, Matrix<V>& B);
 
@@ -50,10 +68,16 @@ public:
     friend Matrix<V> makeE(size_t n);
 
     template<typename V>
-    Matrix<V> makeRot(size_t num1, size_t num2, Matrix<V>& mat);
+    friend Matrix<V> makeRot(size_t num1, size_t num2, Matrix<V>& mat);
+    
+    template<typename V>
+    friend bool QR(Matrix<V>& A,Matrix<V>& Q, Matrix<V>& R,Matrix<V>& Uns);
+
+    template<typename K>
+    friend void Rotation(Matrix<K>& A, size_t num1, size_t num2,Matrix<K>& B);
 
     template<typename V>
-    friend void QR(Matrix<V>& A,Matrix<V>& Q, Matrix<V>& R);
+    friend Matrix<V> pgr(V delta,Matrix<V> b);
 };
 
 
@@ -139,15 +163,15 @@ Matrix<T>::Matrix(Matrix& other)
 
 // Вывод матрицы в консоль.
 template<typename T>
-void Matrix<T>::output()
+void Matrix<T>::output(std::ofstream& fout)
 {
     for (auto& row : matrix)
     {
         for (T elem : row)
-            std::cout << elem << "\t";
-        std::cout << "\n";
+            fout << elem << "\t";
+        fout << "\n";
     }
-    std::cout << std::setprecision(7) << std::endl;
+    fout << std::setprecision(7) << std::endl;
 }
 
 
@@ -159,11 +183,34 @@ std::vector<T>& Matrix<T>::operator[](size_t index)
         return matrix[index];
     else
     {
-        std::cout << "index of row out of range!\n\n";
+        //std::cout << "index of row out of range!\n\n";
         exit(1);
     }
 }
+// Сумма матриц
+template<typename T>
+Matrix<T> Matrix<T>::operator+ (Matrix<T>& B)
+{
+   Matrix<T> Sum(this->matrix.size(),this->matrix[0].size());
+   for(size_t i = 0; i < this->matrix.size();i++)
+      for(size_t j = 0; j < this->matrix[0].size();j++)
+      {
+        Sum.matrix[i][j] = this->matrix[i][j] + B.matrix[i][j];
+      }
+   return Sum;
+}
 
+template<typename T>
+Matrix<T> Matrix<T>::operator- (Matrix<T>& B)
+{
+   Matrix<T> Sum(this->matrix.size(),this->matrix[0].size());
+   for(size_t i = 0; i < this->matrix.size();i++)
+      for(size_t j = 0; j < this->matrix[0].size(); j++)
+      {
+        Sum.matrix[i][j] = this->matrix[i][j] - B.matrix[i][j];
+      }
+   return Sum;
+}
 
 // Скалярное умножение
 template<typename T>
@@ -193,7 +240,7 @@ void Matrix<T>::addRow(size_t src, size_t dest)
 {
     if (src < 0 or dest < 0)
     {
-        std::cout << "Matrix hasn`t got below zero row or column!";
+        //std::cout << "Matrix hasn`t got below zero row or column!";
         exit(1);
     }
     
@@ -201,6 +248,26 @@ void Matrix<T>::addRow(size_t src, size_t dest)
     auto& destination = matrix[dest];
     for (size_t i = 0; i < source.size(); i++)
         destination[i] += source[i];
+}
+
+template<typename T>
+Matrix<T> Matrix<T>::Unv()
+{
+ Matrix<T> Unsv(this->matrix.size(),this->matrix.size());
+ for(size_t i = 0; i < this->matrix.size();i++)
+ {
+   Matrix<T> A = *this;
+   Matrix<T> e(this->matrix.size(),1);
+   e.matrix[i][0] = 1;
+   Matrix<T> _A = makeExtendedMatrix(A,e);
+   _A.forwardGaussStep();
+   Matrix<T> usv = _A.backwardGaussStep();
+   for(size_t j = 0 ; j < this->matrix.size(); j++)
+   {
+    Unsv.matrix[j][i] = usv.matrix[j][0];
+   }
+ }
+ return Unsv;
 }
 
 
@@ -230,7 +297,7 @@ bool Matrix<T>::forwardGaussStep()
                 // Не нашли --> выходим из функции
                 if (i == column.size() - 1)
                 {
-                    std::cout << "Matrix determinate is zero!\n\n";
+                    //std::cout << "Matrix determinate is zero!\n\n";
                     return true;
                 }
             }
@@ -309,6 +376,22 @@ std::pair<Matrix<T>, Matrix<T>> Matrix<T>::divideExtendedMatrix()
     return std::make_pair(left, right);
 }
 
+// Возвращает расширенную матрицу
+template<typename T>
+Matrix<T> makeExtendedMatrix(Matrix<T>& A, Matrix<T>& b)
+{
+    Matrix<T> A_(A.matrix.size(),  A.matrix[0].size() + 1);
+    for (size_t i = 0; i < A.matrix.size(); i++)
+    {
+        for (size_t j = 0; j < A.matrix[0].size() + 1; j++)
+        {
+            (j == A.matrix[0].size()) ?
+            A_.matrix[i][j] = b.matrix[i][0] :
+            A_.matrix[i][j] = A.matrix[i][j];
+        }
+    }
+    return A_;
+}
 
 // Возвращает столбец матрицы с индексом - index.
 template<typename T>
@@ -324,7 +407,7 @@ std::vector<T> Matrix<T>::getColumn(size_t index, size_t first_row_id)
     }
     else
     {
-        std::cout << "index of column or first_row_id out of range!\n\n";
+        //std::cout << "index of column or first_row_id out of range!\n\n";
         exit(1);
     }
 }
@@ -350,21 +433,7 @@ void Matrix<T>::transpoce()
 template<typename T>
 Matrix<T>& Matrix<T>::operator=(Matrix& other)
 {
-    bool is_different;
-    int counter = 0;
-    for (size_t i = 0; i < this->matrix.size(); i++)
-    {
-        if (this->matrix[i] == other.matrix[i])
-            counter++;
-    }
-
-    if (counter == this->matrix.size())
-        is_different = false;
-    else
-        is_different = true;
-
-
-    if (is_different &&
+    if (
         this->matrix.size() == other.matrix.size() &&
         this->matrix[0].size() == other.matrix[0].size())
     {
@@ -374,9 +443,7 @@ Matrix<T>& Matrix<T>::operator=(Matrix& other)
             this->matrix[i] = other.matrix[i];
         }
     }
-    else
-        std::cout << "They are not different!!!\n\n";
-    
+
     return *this;
 }
 
@@ -403,7 +470,7 @@ Matrix<V> multiply(Matrix<V>& A, Matrix<V>& B)
     }
     else
     {
-        std::cout << "dimentions of A and B are different!\n\n";
+        //std::cout << "dimentions of A and B are different!\n\n";
         exit(1);
     }
 }
@@ -418,45 +485,134 @@ Matrix<V> makeE(size_t n)
     }
     return E;
 }
-
+/*
 template<typename K>
 Matrix<K> makeRot(size_t num1, size_t num2, Matrix<K>& mat)
 {
     size_t n = mat.matrix.size();
     Matrix<K> Rot = makeE<K>(n);
-    K c1 = mat[num1][num1]/sqrt(pow(mat[num1][num1],2) + pow(mat[num2][num1],2));
+    K c1 = mat[num1][num1]/sqrt(pow(mat[num1][num1],2) + pow(mat[num2][num1],2)); 
     K c2 = mat[num2][num1]/sqrt(pow(mat[num1][num1],2) + pow(mat[num2][num1],2));
     Rot.matrix[num1][num1] = c1;
     Rot.matrix[num1][num2] = c2;
     Rot.matrix[num2][num1] = -c2;
     Rot.matrix[num2][num2] = c1;
     return Rot;
+}*/
+template<typename K>
+K eqlidNorm(Matrix<K> a)
+{
+    K sum = 0;
+    for(int i = 0;i < a.matrix.size();i++)
+      sum += pow(a.matrix[i][0],2);
+    return sqrt(sum);
 }
 
+template<typename K>
+K Norm1(Matrix<K> a)
+{
+    K max = 0;
+    for(size_t j = 0; j < a.matrix[0].size();j++)
+    {  
+      K sum = 0;
+      for(size_t i = 0; i < a.matrix.size(); i++)
+         sum += std::abs(a.matrix[i][j]);
+      
+      if (sum > max)
+       max = sum;
+    }
+    return max;
+}
+
+template<typename K>
+K Norm2(Matrix<K> a)
+{
+    K max = 0;
+    for(size_t i = 0; i < a.matrix.size();i++)
+    {  
+      K sum = 0;
+      for(size_t j = 0; j < a.matrix[0].size(); j++)
+         sum += std::abs(a.matrix[i][j]);
+
+      if (sum > max)
+       max = sum;
+    }
+    return max;
+}
+template<typename K>
+void Rotation(Matrix<K>& A, size_t num1, size_t num2,Matrix<K>& B)
+{
+  std::vector<K> str1 = A.matrix[num1];
+  std::vector<K> str2 = A.matrix[num2];
+  K c1 = B.matrix[num1][num1]/sqrt(pow(B.matrix[num1][num1],2) + pow(B.matrix[num2][num1],2)); 
+  K c2 = B.matrix[num2][num1]/sqrt(pow(B.matrix[num1][num1],2) + pow(B.matrix[num2][num1],2));
+  for(size_t i = 0; i < A.matrix[0].size(); i++)
+     {
+        A.matrix[num1][i] = c1*str1[i] +c2*str2[i];
+        A.matrix[num2][i] = -c2*str1[i] +c1*str2[i];
+     }
+
+}
 
 //QR РАЗЛОЖЕНИЕ!!!!!
 template<typename K>
-void QR(Matrix<K>& A,Matrix<K>& Q, Matrix<K>& R)
+bool QR(Matrix<K>& _A,Matrix<K>& Q, Matrix<K>& R,Matrix<K>& Uns)
 { 
-  size_t n = A.matrix.size();
+  static double epsilon = 1e-10;
+  size_t n = _A.matrix.size();  
+  //std::pair<Matrix<K>, Matrix<K>> Ap = _A.divideExtendedMatrix();
+  //Matrix<K> A = Ap.first;
+  //Matrix<K> b = Ap.second;
   Matrix<K> Q1 = makeE<K>(n);
-  Matrix<K> A_ = A;
+  //Matrix<K> A_ = A;
   for(size_t i = 0; i < n - 1; i++)
     for(size_t j = i + 1; j < n; j++)
       {
-        Matrix<K> Q2 = makeRot<K>(i,j,A_);
-        Matrix<K> Temp = multiply<K>(Q2,Q1);
-        Q1 = Temp;
-        Matrix<K> Temp1 = multiply<K>(Q2,A_);
-        A_ = Temp1; 
+        if(_A.matrix[i][j])
+       { 
+        //Matrix<K> Q2 = makeRot<K>(i,j,A_);
+       // Matrix<K> Temp = multiply<K>(Q2,Q1);
+       // Q1 = Temp;
+        //Matrix<K> Temp1 = multiply<K>(Q2,A_);
+       // A_ = Temp1;
+        Rotation(Q1,i,j,_A);
+        Rotation(_A,i,j,_A);
+       }
+       else continue;
       }
-  R = A_;
+  for(size_t i = 0; i < n; i++)
+  {
+   if(std::abs(_A.matrix[i][i]) < epsilon)
+     {return true;}
+  }
+  std::pair<Matrix<K>, Matrix<K>> Ap =_A.divideExtendedMatrix();
+
+  R = Ap.first;
   Q1.transpoce();
   Q = Q1;
-  Q1.transpoce();
-  
-/*
-далее нужно сделать обратный ход метода Гаусса для системы Qx = b. Пусть решение x' (решается x' = QT*b)
-далее нужно решить Rx = x'. Это делается обратным ходом метода Гаусса. 
-*/
+  Matrix<K>  x = Ap.second;
+  Matrix<K> R_Ext = makeExtendedMatrix(R,x);
+  Matrix<K> Uns_ = R_Ext.backwardGaussStep();
+  Uns = Uns_;
+  return false;
+}
+
+template<typename T>
+std::pair<T,T> Matrix<T>::Cond()
+{
+    Matrix<T> ThisUnv = this->Unv();
+    T n11 = Norm1<T>(*this);
+    T n12 = Norm1<T>(ThisUnv);
+    T n21 = Norm2<T>(*this);
+    T n22 = Norm2<T>(ThisUnv);
+    return std::pair(n12*n11,n21*n22);
+}
+
+template<typename T>
+Matrix<T> pgr(T delta,Matrix<T> b)
+{
+  Matrix<T> usv(b.matrix.size(),1);
+  for(size_t i =0;i<b.matrix.size();i++)
+      usv.matrix[i][0] = b.matrix[i][0] + delta;
+  return usv;
 }
