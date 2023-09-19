@@ -187,30 +187,33 @@ std::vector<T>& Matrix<T>::operator[](size_t index)
         exit(1);
     }
 }
+
+
 // Сумма матриц
 template<typename T>
-Matrix<T> Matrix<T>::operator+ (Matrix<T>& B)
+Matrix<T> Matrix<T>::operator+(Matrix<T>& B)
 {
-   Matrix<T> Sum(this->matrix.size(),this->matrix[0].size());
-   for(size_t i = 0; i < this->matrix.size();i++)
-      for(size_t j = 0; j < this->matrix[0].size();j++)
-      {
-        Sum.matrix[i][j] = this->matrix[i][j] + B.matrix[i][j];
-      }
-   return Sum;
+    Matrix<T> sum(this->matrix.size(), this->matrix[0].size());
+    for(size_t i = 0; i < this->matrix.size(); i++)
+        for(size_t j = 0; j < this->matrix[0].size(); j++)
+            sum.matrix[i][j] = this->matrix[i][j] + B.matrix[i][j];
+
+    return sum;
 }
 
+
+
 template<typename T>
-Matrix<T> Matrix<T>::operator- (Matrix<T>& B)
+Matrix<T> Matrix<T>::operator-(Matrix<T>& B)
 {
-   Matrix<T> Sum(this->matrix.size(),this->matrix[0].size());
-   for(size_t i = 0; i < this->matrix.size();i++)
-      for(size_t j = 0; j < this->matrix[0].size(); j++)
-      {
-        Sum.matrix[i][j] = this->matrix[i][j] - B.matrix[i][j];
-      }
-   return Sum;
+    Matrix<T> diff(this->matrix.size(), this->matrix[0].size());
+    for(size_t i = 0; i < this->matrix.size(); i++)
+        for(size_t j = 0; j < this->matrix[0].size(); j++)
+            diff.matrix[i][j] = this->matrix[i][j] - B.matrix[i][j];
+
+    return diff;
 }
+
 
 // Скалярное умножение
 template<typename T>
@@ -250,6 +253,8 @@ void Matrix<T>::addRow(size_t src, size_t dest)
         destination[i] += source[i];
 }
 
+
+//
 template<typename T>
 Matrix<T> Matrix<T>::Unv()
 {
@@ -376,6 +381,7 @@ std::pair<Matrix<T>, Matrix<T>> Matrix<T>::divideExtendedMatrix()
     return std::make_pair(left, right);
 }
 
+
 // Возвращает расширенную матрицу
 template<typename T>
 Matrix<T> makeExtendedMatrix(Matrix<T>& A, Matrix<T>& b)
@@ -392,6 +398,7 @@ Matrix<T> makeExtendedMatrix(Matrix<T>& A, Matrix<T>& b)
     }
     return A_;
 }
+
 
 // Возвращает столбец матрицы с индексом - index.
 template<typename T>
@@ -433,8 +440,7 @@ void Matrix<T>::transpoce()
 template<typename T>
 Matrix<T>& Matrix<T>::operator=(Matrix& other)
 {
-    if (
-        this->matrix.size() == other.matrix.size() &&
+    if (this->matrix.size() == other.matrix.size() &&
         this->matrix[0].size() == other.matrix[0].size())
     {
         for (size_t i = 0; i < this->matrix.size(); i++)
@@ -475,6 +481,8 @@ Matrix<V> multiply(Matrix<V>& A, Matrix<V>& B)
     }
 }
 
+
+// Создает единичную матрицу размера nxn
 template<typename V>
 Matrix<V> makeE(size_t n)
 {
@@ -485,45 +493,38 @@ Matrix<V> makeE(size_t n)
     }
     return E;
 }
-/*
-template<typename K>
-Matrix<K> makeRot(size_t num1, size_t num2, Matrix<K>& mat)
-{
-    size_t n = mat.matrix.size();
-    Matrix<K> Rot = makeE<K>(n);
-    K c1 = mat[num1][num1]/sqrt(pow(mat[num1][num1],2) + pow(mat[num2][num1],2)); 
-    K c2 = mat[num2][num1]/sqrt(pow(mat[num1][num1],2) + pow(mat[num2][num1],2));
-    Rot.matrix[num1][num1] = c1;
-    Rot.matrix[num1][num2] = c2;
-    Rot.matrix[num2][num1] = -c2;
-    Rot.matrix[num2][num2] = c1;
-    return Rot;
-}*/
+
+
+// Возвращает евклидову норму вектора
 template<typename K>
 K eqlidNorm(Matrix<K> a)
 {
     K sum = 0;
     for(int i = 0;i < a.matrix.size();i++)
-      sum += pow(a.matrix[i][0],2);
+        sum += pow(a.matrix[i][0], 2);
+
     return sqrt(sum);
 }
 
+
+// Первая норма матрицы
 template<typename K>
 K Norm1(Matrix<K> a)
 {
     K max = 0;
     for(size_t j = 0; j < a.matrix[0].size();j++)
     {  
-      K sum = 0;
-      for(size_t i = 0; i < a.matrix.size(); i++)
-         sum += std::abs(a.matrix[i][j]);
-      
-      if (sum > max)
-       max = sum;
+        K sum = 0;
+        for(size_t i = 0; i < a.matrix.size(); i++)
+            sum += std::abs(a.matrix[i][j]);
+        if (sum > max)
+            max = sum;
     }
     return max;
 }
 
+
+// Вторая норма матрицы
 template<typename K>
 K Norm2(Matrix<K> a)
 {
@@ -539,80 +540,80 @@ K Norm2(Matrix<K> a)
     }
     return max;
 }
+
+
+// Быстрое умножение на матрицу поворота
 template<typename K>
 void Rotation(Matrix<K>& A, size_t num1, size_t num2,Matrix<K>& B)
 {
-  std::vector<K> str1 = A.matrix[num1];
-  std::vector<K> str2 = A.matrix[num2];
-  K c1 = B.matrix[num1][num1]/sqrt(pow(B.matrix[num1][num1],2) + pow(B.matrix[num2][num1],2)); 
-  K c2 = B.matrix[num2][num1]/sqrt(pow(B.matrix[num1][num1],2) + pow(B.matrix[num2][num1],2));
-  for(size_t i = 0; i < A.matrix[0].size(); i++)
-     {
+    auto str1 = A.matrix[num1];
+    auto str2 = A.matrix[num2];
+    K c1 = B.matrix[num1][num1]/sqrt(pow(B.matrix[num1][num1],2) + pow(B.matrix[num2][num1],2)); 
+    K c2 = B.matrix[num2][num1]/sqrt(pow(B.matrix[num1][num1],2) + pow(B.matrix[num2][num1],2));
+    for(size_t i = 0; i < A.matrix[0].size(); i++)
+    {
         A.matrix[num1][i] = c1*str1[i] +c2*str2[i];
         A.matrix[num2][i] = -c2*str1[i] +c1*str2[i];
-     }
-
+    }
 }
 
-//QR РАЗЛОЖЕНИЕ!!!!!
+
+//QR разложение
 template<typename K>
-bool QR(Matrix<K>& _A,Matrix<K>& Q, Matrix<K>& R,Matrix<K>& Uns)
+bool QR(Matrix<K>& _A, Matrix<K>& Q, Matrix<K>& R, Matrix<K>& Uns)
 { 
-  static double epsilon = 1e-10;
-  size_t n = _A.matrix.size();  
-  //std::pair<Matrix<K>, Matrix<K>> Ap = _A.divideExtendedMatrix();
-  //Matrix<K> A = Ap.first;
-  //Matrix<K> b = Ap.second;
-  Matrix<K> Q1 = makeE<K>(n);
-  //Matrix<K> A_ = A;
-  for(size_t i = 0; i < n - 1; i++)
-    for(size_t j = i + 1; j < n; j++)
-      {
-        if(_A.matrix[i][j])
-       { 
-        //Matrix<K> Q2 = makeRot<K>(i,j,A_);
-       // Matrix<K> Temp = multiply<K>(Q2,Q1);
-       // Q1 = Temp;
-        //Matrix<K> Temp1 = multiply<K>(Q2,A_);
-       // A_ = Temp1;
-        Rotation(Q1,i,j,_A);
-        Rotation(_A,i,j,_A);
-       }
-       else continue;
-      }
-  for(size_t i = 0; i < n; i++)
-  {
-   if(std::abs(_A.matrix[i][i]) < epsilon)
-     {return true;}
-  }
-  std::pair<Matrix<K>, Matrix<K>> Ap =_A.divideExtendedMatrix();
+    static double epsilon = 1e-10;
+    auto Q1 = makeE<K>(_A.matrix.size());
 
-  R = Ap.first;
-  Q1.transpoce();
-  Q = Q1;
-  Matrix<K>  x = Ap.second;
-  Matrix<K> R_Ext = makeExtendedMatrix(R,x);
-  Matrix<K> Uns_ = R_Ext.backwardGaussStep();
-  Uns = Uns_;
-  return false;
+    for(size_t i = 0; i < _A.matrix.size() - 1; i++)
+        for(size_t j = i + 1; j < _A.matrix.size(); j++)
+        {
+            if(_A.matrix[i][j])
+            {
+                Rotation(Q1, i, j, _A);
+                Rotation(_A, i, j, _A);
+            }
+            else
+                continue;
+        }
+
+    for(size_t i = 0; i < _A.matrix.size(); i++)
+        if(std::abs(_A.matrix[i][i]) < epsilon)
+            return true;
+
+    auto Ap =_A.divideExtendedMatrix();
+
+    R = Ap.first;
+    Q1.transpoce();
+    Q = Q1;
+    Matrix<K>  x = Ap.second;
+    Matrix<K> R_Ext = makeExtendedMatrix(R,x);
+    Matrix<K> Uns_ = R_Ext.backwardGaussStep();
+    Uns = Uns_;
+
+    return false;
 }
 
+
+// Возвращает число обусловленности
 template<typename T>
 std::pair<T,T> Matrix<T>::Cond()
 {
-    Matrix<T> ThisUnv = this->Unv();
+    auto ThisUnv = this->Unv();
     T n11 = Norm1<T>(*this);
     T n12 = Norm1<T>(ThisUnv);
     T n21 = Norm2<T>(*this);
     T n22 = Norm2<T>(ThisUnv);
-    return std::pair(n12*n11,n21*n22);
+    return std::pair(n12 * n11, n21 * n22);
 }
 
+
+// Вносимая погрешность 
 template<typename T>
-Matrix<T> pgr(T delta,Matrix<T> b)
+Matrix<T> pgr(T delta, Matrix<T> b)
 {
-  Matrix<T> usv(b.matrix.size(),1);
-  for(size_t i =0;i<b.matrix.size();i++)
-      usv.matrix[i][0] = b.matrix[i][0] + delta;
-  return usv;
+    Matrix<T> usv(b.matrix.size(), 1);
+    for(size_t i =0; i < b.matrix.size(); i++)
+        usv.matrix[i][0] = b.matrix[i][0] + delta;
+    return usv;
 }
