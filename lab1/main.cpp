@@ -1,4 +1,4 @@
-#include "include/Matrix.hpp"
+#include "../matrix/Matrix.hpp"
 #define T double
 
 static constexpr int TESTS_COUNT = 5;
@@ -56,7 +56,7 @@ int main()
          fout << "Result:\n";
          usvQR.output(fout);
 
-         std::pair<Matrix<T>, Matrix<T>>  pr = Test.divideExtendedMatrix();
+         auto pr = Test.divideExtendedMatrix();
          Matrix<T> pr1 = pr.first;
          Matrix<T> pr2 = pr.second;
          Matrix<T> b = multiply(pr1,usvQR);

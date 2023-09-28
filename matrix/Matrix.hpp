@@ -8,6 +8,9 @@
 #include <fstream>
 
 
+constexpr static double epsilon = 10e-4;
+
+
 template<typename T>
 class Matrix
 {
@@ -26,10 +29,12 @@ public:
 
     // Оператор присваивания
     Matrix<T>& operator=(Matrix<T>& other);
+
     // Перегрузка операторов
     std::vector<T>& operator[](size_t index);
     Matrix<T> operator+(Matrix<T>& B);
     Matrix<T> operator-(Matrix<T>& B);
+
     // Геттеры и Сеттеры
     std::vector<std::vector<T>>& getMatrix() { return matrix; }
 
@@ -38,14 +43,18 @@ public:
     std::vector<T> getColumn(size_t index, size_t first_row_id = 0);
     T scalarMul(std::vector<T>& first, std::vector<T>& second);
     void transpoce();
-    void mulRowAndScalar(size_t row_id, double scalar);
+    void mulRowAndScalar(size_t row_id, T scalar);
+    void mulMatrixAndScalar(T scalar);
     void addRow(size_t src, size_t dest);
+    std::pair<Matrix<T>, Matrix<T>> makeMatrixGoodForIter(T iter_param, Matrix<T>& E);
     std::pair<Matrix<T>, Matrix<T>> divideExtendedMatrix();
     Matrix<T> Unv();
     std::pair<T,T> Cond();
+
     // Методы по заданию
     bool forwardGaussStep();
     Matrix<T> backwardGaussStep();
+    Matrix<T> simpleIterationsMethod(Matrix<T> initial_approx, Matrix<T>& E, T iter_param);
 
     // Дружественные фунции
 
@@ -53,10 +62,10 @@ public:
     friend K eqlidNorm(Matrix<K> a);
 
     template<typename V>
-    friend V Norm1(Matrix<V> a);
+    friend V octahedralNorm(Matrix<V> a);
     
     template<typename V>
-    friend V Norm2(Matrix<V> a);
+    friend V cubicNorm(Matrix<V> a);
 
     template<typename V>
     friend Matrix<V> makeExtendedMatrix(Matrix<V>& A, Matrix<V>& b);
@@ -99,6 +108,7 @@ void Matrix<float>::fill(std::filesystem::path& filename)
             row++;
         }
     }
+    file.close();
 }
 
 
@@ -119,6 +129,7 @@ void Matrix<double>::fill(std::filesystem::path& filename)
             row++;
         }
     }
+    file.close();
 }
 
 
@@ -230,7 +241,7 @@ T Matrix<T>::scalarMul(std::vector<T>& first, std::vector<T>& second)
 
 // Умножение строки на скаляр.
 template<typename T>
-void Matrix<T>::mulRowAndScalar(size_t row_id, double scalar)
+void Matrix<T>::mulRowAndScalar(size_t row_id, T scalar)
 {
     for (auto& elem : matrix[row_id])
         elem *= scalar;
@@ -509,36 +520,36 @@ K eqlidNorm(Matrix<K> a)
 
 // Первая норма матрицы
 template<typename K>
-K Norm1(Matrix<K> a)
+K octahedralNorm(Matrix<K> A)
 {
-    K max = 0;
-    for(size_t j = 0; j < a.matrix[0].size();j++)
+    K max_sum = 0;
+    for(size_t j = 0; j < A.matrix[0].size(); j++)
     {  
         K sum = 0;
-        for(size_t i = 0; i < a.matrix.size(); i++)
-            sum += std::abs(a.matrix[i][j]);
-        if (sum > max)
-            max = sum;
+        for(size_t i = 0; i < A.matrix.size(); i++)
+            sum += std::abs(A.matrix[i][j]);
+        if (sum > max_sum)
+            max_sum = sum;
     }
-    return max;
+    return max_sum;
 }
 
 
 // Вторая норма матрицы
 template<typename K>
-K Norm2(Matrix<K> a)
+K cubicNorm(Matrix<K> A)
 {
-    K max = 0;
-    for(size_t i = 0; i < a.matrix.size();i++)
+    K max_sum = 0;
+    for(size_t i = 0; i < A.matrix.size(); i++)
     {  
-      K sum = 0;
-      for(size_t j = 0; j < a.matrix[0].size(); j++)
-         sum += std::abs(a.matrix[i][j]);
+        K sum = 0;
+        for(size_t j = 0; j < A.matrix[0].size(); j++)
+            sum += std::abs(A.matrix[i][j]);
 
-      if (sum > max)
-       max = sum;
+        if (sum > max_sum)
+            max_sum = sum;
     }
-    return max;
+    return max_sum;
 }
 
 
@@ -600,10 +611,10 @@ template<typename T>
 std::pair<T,T> Matrix<T>::Cond()
 {
     auto ThisUnv = this->Unv();
-    T n11 = Norm1<T>(*this);
-    T n12 = Norm1<T>(ThisUnv);
-    T n21 = Norm2<T>(*this);
-    T n22 = Norm2<T>(ThisUnv);
+    T n11 = octahedralNorm<T>(*this);
+    T n12 = octahedralNorm<T>(ThisUnv);
+    T n21 = cubicNorm<T>(*this);
+    T n22 = cubicNorm<T>(ThisUnv);
     return std::pair(n12 * n11, n21 * n22);
 }
 
@@ -616,4 +627,56 @@ Matrix<T> pgr(T delta, Matrix<T> b)
     for(size_t i =0; i < b.matrix.size(); i++)
         usv.matrix[i][0] = b.matrix[i][0] + delta;
     return usv;
+}
+
+
+// Методы, необходимые для работы Второй лабораторной работы
+
+
+// Умножение матрицы на число
+template<typename T>
+void Matrix<T>::mulMatrixAndScalar(T scalar)
+{
+    for (size_t i = 0; i < this->matrix.size(); i++)
+        this->mulRowAndScalar(i, scalar);
+}
+
+
+// Метод преобразования матрицы системы к виду, необходимому для итерационных методов
+template<typename T>
+std::pair<Matrix<T>, Matrix<T>> Matrix<T>::makeMatrixGoodForIter(T iter_param, Matrix<T>& E)
+{
+    /* Возвращает пару - матрицу С и вектор-столбец
+    правой части умноженный на итерационный параметр - y */
+
+    auto divided = this->divideExtendedMatrix();
+    divided.first.mulMatrixAndScalar(iter_param);
+    divided.second.mulMatrixAndScalar(iter_param);
+    Matrix<T> y = divided.second;
+    Matrix<T> C = E - divided.first;
+    return std::make_pair(C, y);
+}
+
+
+template<typename T>
+Matrix<T> Matrix<T>::simpleIterationsMethod(Matrix<T> initial_approx, Matrix<T>& E, T iter_param)
+{
+    auto pair = this->makeMatrixGoodForIter(iter_param, E);
+    auto norm_C = cubicNorm(pair.first);
+    if (norm_C >= 1)
+    {
+        std::cout << "|| C || >= 1 !!! (|| C || = " << norm_C << ")";
+        exit(1);
+    }
+    
+    Matrix<T> solution(this->matrix.size(), 1);
+    Matrix<T> temp(this->matrix.size(), 1);
+    do
+    {
+        Matrix<T> new_solution = multiply<T>(pair.first, initial_approx) + pair.second;
+        temp = initial_approx;
+        solution = new_solution;
+        initial_approx = solution;
+    } while (cubicNorm(solution - temp) >= (((1 - norm_C) / norm_C) * epsilon));
+    return solution;
 }
