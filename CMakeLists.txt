@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.11)
-project(opt_labs)
+project(cm_labs)
 set(CMAKE_CXX_STANDARD 20)
 include_directories(matrix lab1 lab2)
 add_executable(lab lab2/main.cpp)

@@ -8,7 +8,26 @@
 #include <fstream>
 
 
+
 constexpr static double epsilon = 10e-4;
+constexpr static double ITER_PARAM = 0.005;
+constexpr static double RELAX_PARAM = 0.5;
+constexpr static size_t MATRIX_ORD = 201;
+
+
+enum class IterativeMethod {
+    SIMPLE_ITER = 0,
+    JACOBI,
+    SEIDEL,
+    RELAXATION
+};
+
+
+enum class Norm {
+    octahedral = 1,
+    spherical,
+    cubic
+};
 
 
 template<typename T>
@@ -46,15 +65,18 @@ public:
     void mulRowAndScalar(size_t row_id, T scalar);
     void mulMatrixAndScalar(T scalar);
     void addRow(size_t src, size_t dest);
-    std::pair<Matrix<T>, Matrix<T>> makeMatrixGoodForIter(T iter_param, Matrix<T>& E);
+    std::pair<Matrix<T>, Matrix<T>> makeMatrixGoodForIter(IterativeMethod method, std::pair<Matrix<T>, Matrix<T>> divided);
     std::pair<Matrix<T>, Matrix<T>> divideExtendedMatrix();
     Matrix<T> Unv();
     std::pair<T,T> Cond();
 
     // Методы по заданию
+    // lab1
     bool forwardGaussStep();
     Matrix<T> backwardGaussStep();
-    Matrix<T> simpleIterationsMethod(Matrix<T> initial_approx, Matrix<T>& E, T iter_param);
+    // lab2
+    Matrix<T> simpleIterationsMethod(Matrix<T> initial_approx);
+    Matrix<T> methodJacobi(Matrix<T> initial_approx);
 
     // Дружественные фунции
 
@@ -87,6 +109,9 @@ public:
 
     template<typename V>
     friend Matrix<V> pgr(V delta,Matrix<V> b);
+
+    template<typename V>
+    friend std::pair<Matrix<V>, double> relaxationMethod(Matrix<V> initial_approx, Matrix<V> U, Matrix<V> D, Matrix<V> L, Matrix<V> b, IterativeMethod method);
 };
 
 
@@ -630,6 +655,19 @@ Matrix<T> pgr(T delta, Matrix<T> b)
 }
 
 
+
+////////////////////////////////////////////////////
+
+//         //\\    ///////    |||||||||
+//        //  \\   //    //   ||    ///
+//       ////\\\\  ////////       ///
+//      //      \\ //    //     ///
+/////////        \\///////    //////////
+
+////////////////////////////////////////////////////
+
+
+
 // Методы, необходимые для работы Второй лабораторной работы
 
 
@@ -644,39 +682,248 @@ void Matrix<T>::mulMatrixAndScalar(T scalar)
 
 // Метод преобразования матрицы системы к виду, необходимому для итерационных методов
 template<typename T>
-std::pair<Matrix<T>, Matrix<T>> Matrix<T>::makeMatrixGoodForIter(T iter_param, Matrix<T>& E)
+std::pair<Matrix<T>, Matrix<T>> Matrix<T>::makeMatrixGoodForIter(IterativeMethod method, std::pair<Matrix<T>, Matrix<T>> divided)
 {
-    /* Возвращает пару - матрицу С и вектор-столбец
-    правой части умноженный на итерационный параметр - y */
+    /* 
+    В зависимости от метода возвращает пару - матрицу С и вектор-столбец
+    правой части умноженный на итерационный параметр - y 
+    */
 
-    auto divided = this->divideExtendedMatrix();
-    divided.first.mulMatrixAndScalar(iter_param);
-    divided.second.mulMatrixAndScalar(iter_param);
-    Matrix<T> y = divided.second;
-    Matrix<T> C = E - divided.first;
-    return std::make_pair(C, y);
+    // divided --> std::pair (first = A, second = b, СЛАУ Ax = b)
+
+    if (method == IterativeMethod::SIMPLE_ITER)
+    {
+        auto E = makeE<T>(this->matrix.size());
+        divided.first.mulMatrixAndScalar(ITER_PARAM);
+        divided.second.mulMatrixAndScalar(ITER_PARAM);
+        Matrix<T> C = E - divided.first;
+        Matrix<T> y = divided.second;
+
+        return std::make_pair(C, y);
+    }
+    else if (method == IterativeMethod::JACOBI || method == IterativeMethod::SEIDEL)
+    {
+        Matrix<T> C = divided.first;
+        Matrix<T> y = divided.second;
+        switch (method)
+        {
+        case IterativeMethod::JACOBI:
+        {
+            // c(i,j) = -(a(i, j) / a(i, i)) если (i != j).
+            for (size_t i = 0; i < this->matrix.size(); i++)
+                for (size_t j = 0; j < this->matrix.size(); j++)
+                {
+                    if (i == j)
+                    {
+                        y.matrix[i][0] = divided.second.matrix[i][0] / divided.first.matrix[i][j];
+                        C.matrix[i][j] = 0;
+                    }
+                    else
+                        C.matrix[i][j] = -(divided.first.matrix[i][j] / divided.first.matrix[i][i]);
+                }
+            break;
+        }
+        case IterativeMethod::SEIDEL:
+        {
+            for (size_t i = 0; i < MATRIX_ORD; i++)
+            {
+                C.matrix[i][i] = 0;
+                y.matrix[i][0] = divided.second.matrix[i][0] / divided.first.matrix[i][i];
+                if (i == 0)
+                    C.matrix[i][i + 1] = -(divided.first.matrix[i][i + 1] / divided.first.matrix[i][i]);
+                else if (i == MATRIX_ORD - 1)
+                    C.matrix[i][i - 1] = -(divided.first.matrix[i][i - 1] / divided.first.matrix[i][i]);
+                else
+                {
+                    C.matrix[i][i + 1] = -(divided.first.matrix[i][i + 1] / divided.first.matrix[i][i]);
+                    C.matrix[i][i - 1] = -(divided.first.matrix[i][i - 1] / divided.first.matrix[i][i]);
+                }
+            }
+        }
+        default:
+            break;
+        }
+        return std::make_pair(C, y);
+    }
+    else if (method == IterativeMethod::RELAXATION)
+    {
+        Matrix<T> C = divided.first;
+        Matrix<T> y = divided.second;
+
+        for (size_t i = 0; i < MATRIX_ORD; i++)
+        {
+            C.matrix[i][i] = 0;
+            y.matrix[i][0] = ((divided.second.matrix[i][0] * RELAX_PARAM)/ divided.first.matrix[i][i]);
+            if (i == 0)
+                C.matrix[i][i + 1] = -((divided.first.matrix[i][i + 1] * RELAX_PARAM) / divided.first.matrix[i][i]);
+            else if (i == MATRIX_ORD - 1)
+                C.matrix[i][i - 1] = -((divided.first.matrix[i][i - 1] * RELAX_PARAM) / divided.first.matrix[i][i]);
+            else
+            {
+                C.matrix[i][i + 1] = -((divided.first.matrix[i][i + 1] * RELAX_PARAM) / divided.first.matrix[i][i]);
+                C.matrix[i][i - 1] = -((divided.first.matrix[i][i - 1] * RELAX_PARAM) / divided.first.matrix[i][i]);
+            }
+        }
+        return std::make_pair(C, y);
+    }
+    else
+    {
+        std::cout << "Unknown method!\n";
+        exit(1);
+    }
+
+    return std::make_pair(divided.first, divided.second);
 }
 
 
 template<typename T>
-Matrix<T> Matrix<T>::simpleIterationsMethod(Matrix<T> initial_approx, Matrix<T>& E, T iter_param)
+Matrix<T> Matrix<T>::simpleIterationsMethod(Matrix<T> initial_approx)
 {
-    auto pair = this->makeMatrixGoodForIter(iter_param, E);
+    size_t iter_counter = 0;
+    
+    // Получаем вид С = (E - ITER_PARAM * A) & y = iter_param * b
+    auto pair = this->makeMatrixGoodForIter(IterativeMethod::SIMPLE_ITER, this->divideExtendedMatrix());
+
+    // Считаем норму + проверка на сходимость метода (|| C || < 1)
     auto norm_C = cubicNorm(pair.first);
     if (norm_C >= 1)
     {
-        std::cout << "|| C || >= 1 !!! (|| C || = " << norm_C << ")";
+        std::cout << "|| C || >= 1 !!! (|| C || = " << norm_C << ")\n";
         exit(1);
     }
     
     Matrix<T> solution(this->matrix.size(), 1);
     Matrix<T> temp(this->matrix.size(), 1);
+    // Выполняем итерацию. new_solution = x ^ (n + 1) ; temp = x ^ (n).
     do
     {
+        iter_counter++;
+        // x ^ (n + 1) = C * x ^ (n) + ITER_PARAM * b 
         Matrix<T> new_solution = multiply<T>(pair.first, initial_approx) + pair.second;
         temp = initial_approx;
         solution = new_solution;
         initial_approx = solution;
     } while (cubicNorm(solution - temp) >= (((1 - norm_C) / norm_C) * epsilon));
+
+    // Есть возможносоть посмотреть количество итераций метода
+    // Чем меньше итерационный параметр -> тем больше итераций.
+    std::cout << "Number of iterations in SIM: " << iter_counter << "\n";
+
     return solution;
+}
+
+
+template<typename T>
+Matrix<T> Matrix<T>::methodJacobi(Matrix<T> initial_approx)
+{
+    size_t iter_counter = 0;
+    
+    // Получаем вид С = -D ^ (-1) * (U + L) & y = D ^ (-1) * b
+    auto pair = this->makeMatrixGoodForIter(IterativeMethod::JACOBI, this->divideExtendedMatrix());
+
+    auto norm_C = cubicNorm(pair.first);
+    if (norm_C >= 1)
+    {
+        std::cout << "|| C || >= 1 !!! (|| C || = " << norm_C << ")\n";
+        exit(1);
+    }
+
+    Matrix<T> solution(this->matrix.size(), 1);
+    Matrix<T> temp(this->matrix.size(), 1);
+    // Выполняем итерацию. new_solution = x ^ (n + 1) ; temp = x ^ (n).
+    do
+    {
+        iter_counter++;
+        // x ^ (n + 1) = C * x ^ (n) + y
+        Matrix<T> new_solution = multiply<T>(pair.first, initial_approx) + pair.second;
+        temp = initial_approx;
+        solution = new_solution;
+        initial_approx = solution;
+    } while (cubicNorm(solution - temp) >= (((1 - norm_C) / norm_C) * epsilon));
+    
+    // Есть возможносоть посмотреть количество итераций метода
+    // Чем меньше итерационный параметр -> тем больше итераций.
+    std::cout << "Number of iterations in Jacobi: " << iter_counter << "\n";
+
+    return solution;
+}
+
+
+// Дружественные функции
+
+
+
+template<typename V>
+std::pair<Matrix<V>, double>  relaxationMethod(Matrix<V> initial_approx, Matrix<V> U, Matrix<V> D, Matrix<V> L, Matrix<V> b, IterativeMethod method)
+{
+    static double eps = 10e-6;
+    size_t iter_counter = 0;
+    // U - "Верхняя треугольная", L - "нижняя". Формируем С.
+    Matrix<V> C(MATRIX_ORD, MATRIX_ORD);
+    for (size_t i = 0; i < MATRIX_ORD; i++)
+    {
+        C.matrix[i][i] = D[i][0];
+        if (i != MATRIX_ORD - 1)
+        {
+            C.matrix[i][i + 1] = U.matrix[i][0];
+            C.matrix[i + 1][i] = L.matrix[i][0];
+        }
+    }
+    std::ofstream y("vectorY");
+    C.output(y);
+    y << "\n\n";
+    auto pair = (method == IterativeMethod::SEIDEL) ?
+                (C.makeMatrixGoodForIter(IterativeMethod::SEIDEL, std::make_pair(C, b))) :
+                (C.makeMatrixGoodForIter(IterativeMethod::RELAXATION, std::make_pair(C, b)));
+
+    auto norm_C = cubicNorm(pair.first);
+    if (norm_C >= 1)
+    {
+        std::cout << "|| C || >= 1 !!! (|| C || = " << norm_C << ")\n";
+        exit(1);
+    }
+    // std::cout << "|| C || = " << norm_C << "\n";
+    Matrix<V> solution(MATRIX_ORD, 1);
+    Matrix<V> temp(MATRIX_ORD, 1);
+
+
+    y << "Vector Y: \n";
+    pair.second.output(y);
+    y << "\n\nMatrix C: \n";
+    pair.first.output(y);
+
+    double param = (method == IterativeMethod::SEIDEL) ? 1 : RELAX_PARAM;
+    // Выполняем итерацию.
+    do
+    {
+        iter_counter++;
+        Matrix<V> new_solution(MATRIX_ORD, 1);
+        for (size_t i = 0; i < MATRIX_ORD; i++)
+        {
+            if (i == 0)
+                new_solution[i][0] = (initial_approx[i][0] * (1 - param) + initial_approx[i + 1][0] * pair.first.matrix[i][i + 1] + pair.second.matrix[i][0]);
+            else if (i == MATRIX_ORD - 1)
+                new_solution[i][0] = (initial_approx[i][0] * (1 - param) + new_solution[i - 1][0] * pair.first.matrix[i][i - 1] + pair.second.matrix[i][0]);
+            else
+            {
+                new_solution[i][0] = ((initial_approx[i][0] * (1 - param)) + (initial_approx[i + 1][0] * pair.first.matrix[i][i + 1]) +
+                            (new_solution[i - 1][0] * pair.first.matrix[i][i - 1]) + pair.second.matrix[i][0]);
+            }
+        }
+        temp = initial_approx;
+        solution = new_solution;
+        initial_approx = solution;
+    } while (cubicNorm(solution - temp) / cubicNorm(temp) >= epsilon);
+    
+    // Есть возможносоть посмотреть количество итераций метода
+    // Чем меньше итерационный параметр -> тем больше итераций.
+    if (method == IterativeMethod::SEIDEL)
+        std::cout << "Number of iterations in Seidel: " << iter_counter << "\n";
+    else
+        std::cout << "Number of iterations in Relax: " << iter_counter << "\n";
+    
+    
+    auto residual = multiply(C, solution);
+    auto norm = cubicNorm(b - residual);
+    return std::make_pair(solution, norm);
 }
