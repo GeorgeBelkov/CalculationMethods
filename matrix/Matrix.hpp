@@ -9,9 +9,9 @@
 
 
 
-constexpr static double epsilon = 10e-4;
-constexpr static double ITER_PARAM = 0.005;
-constexpr static double RELAX_PARAM = 0.5;
+constexpr static double epsilon = 10e-7;
+constexpr static double ITER_PARAM = 0.0072;
+constexpr static double RELAX_PARAM = 0.18;
 constexpr static size_t MATRIX_ORD = 201;
 
 
@@ -794,6 +794,7 @@ Matrix<T> Matrix<T>::simpleIterationsMethod(Matrix<T> initial_approx)
     
     Matrix<T> solution(this->matrix.size(), 1);
     Matrix<T> temp(this->matrix.size(), 1);
+    std::ofstream SIM("SIM-iters.txt");
     // Выполняем итерацию. new_solution = x ^ (n + 1) ; temp = x ^ (n).
     do
     {
@@ -803,8 +804,10 @@ Matrix<T> Matrix<T>::simpleIterationsMethod(Matrix<T> initial_approx)
         temp = initial_approx;
         solution = new_solution;
         initial_approx = solution;
+        solution.output(SIM);
+        SIM << "\n";
     } while (cubicNorm(solution - temp) >= (((1 - norm_C) / norm_C) * epsilon));
-
+    SIM.close();
     // Есть возможносоть посмотреть количество итераций метода
     // Чем меньше итерационный параметр -> тем больше итераций.
     std::cout << "Number of iterations in SIM: " << iter_counter << "\n";

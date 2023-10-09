@@ -38,7 +38,7 @@ int main()
         IterativeMethod::RELAXATION
     };
 
-    Matrix<T> Test(4, 5, "/home/george/Desktop/Projects/C++/CalculationMethods/lab2/tests/test1.txt");
+    Matrix<T> Test(4, 5, "/home/george/Desktop/Projects/C++/CalculationMethods/lab2/tests/test2.txt");
     Matrix<T> approx_for_test1(4, 1, "/home/george/Desktop/Projects/C++/CalculationMethods/lab2/tests/test1_approx.txt");
     Matrix<T> approx_for_test2(MATRIX_ORD, 1);
 
