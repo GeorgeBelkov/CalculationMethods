@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.11)
+project(lab4)
+set(CMAKE_CXX_STANDARD 20)
+target_include_directories(lab4 PUBLIC include)
+target_link_libraries(lab4 calc_met_lib)
+add_library(lab4 STATIC main.cpp)
