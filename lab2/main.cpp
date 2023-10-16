@@ -1,4 +1,4 @@
-#include "../matrix/Matrix.hpp"
+#include "../include/Matrix.hpp"
 #define T double
 
 
