@@ -61,6 +61,7 @@ public:
     void output(std::ofstream& fout);
     std::vector<T> getColumn(size_t index, size_t first_row_id = 0);
     T scalarMul(std::vector<T>& first, std::vector<T>& second);
+    T scalarMul(Matrix<T>& first, Matrix<T>& second);
     void transpoce();
     void mulRowAndScalar(size_t row_id, T scalar);
     void mulMatrixAndScalar(T scalar);
@@ -79,10 +80,10 @@ public:
     Matrix<T> simpleIterationsMethod(Matrix<T> initial_approx);
     Matrix<T> methodJacobi(Matrix<T> initial_approx);
     // lab4
-    Matrix<T> makeHessenbergForm();
     Matrix<T> iterativeQR(Matrix<T> A);
-    std::pair<Matrix<T>, Matrix<T>> QR(Matrix<T> _A);
-    std::pair<Matrix<T>, T> reverseIterationsMethod(bool rayleigh);
+    void makeHessenbergForm(Matrix<T>& A);
+    std::pair<Matrix<T>, Matrix<T>> QR(Matrix<T>& A);
+    std::pair<Matrix<T>, T> reverseIterationsMethod(bool rayleigh, Matrix<T>& A, Matrix<T> initial_approx, T lambda);
 
     // Дружественные фунции
 
@@ -111,7 +112,10 @@ public:
     friend bool QRforSLAU(Matrix<V>& A,Matrix<V>& Q, Matrix<V>& R,Matrix<V>& Uns);
 
     template<typename K>
-    friend void Rotation(Matrix<K>& A, size_t num1, size_t num2,Matrix<K>& B);
+    friend void Rotation(Matrix<K>& A, size_t first_id, size_t second_id, Matrix<K>& B, bool transpose);
+
+    template<typename K>
+    friend void RotationForHess(Matrix<K>& A, size_t first_id, size_t second_id, Matrix<K>& B, bool transpose);
 
     template<typename V>
     friend Matrix<V> pgr(V delta,Matrix<V> b);
@@ -265,6 +269,18 @@ T Matrix<T>::scalarMul(std::vector<T>& first, std::vector<T>& second)
     for (size_t i = 0; i < first.size(); i++)
     {
         result += (first[i] * second[i]);
+    }
+    return result;
+}
+
+
+template<typename T>
+T Matrix<T>::scalarMul(Matrix<T>& first, Matrix<T>& second)
+{
+    T result = 0;
+    for (size_t i = 0; i < first.matrix.size(); i++)
+    {
+        result += (first[i][0] * second[i][0]);
     }
     return result;
 }
@@ -586,16 +602,47 @@ K cubicNorm(Matrix<K> A)
 
 // Быстрое умножение на матрицу поворота
 template<typename K>
-void Rotation(Matrix<K>& A, size_t num1, size_t num2, Matrix<K>& B)
+void RotationForHess(Matrix<K>& A, size_t first_id, size_t second_id, Matrix<K>& B, bool transpose)
 {
-    auto str1 = A.matrix[num1];
-    auto str2 = A.matrix[num2];
-    K c1 = B.matrix[num1][num1]/sqrt(pow(B.matrix[num1][num1],2) + pow(B.matrix[num2][num1],2)); 
-    K c2 = B.matrix[num2][num1]/sqrt(pow(B.matrix[num1][num1],2) + pow(B.matrix[num2][num1],2));
+    auto first_row = A.matrix[first_id];
+    auto second_row = A.matrix[second_id];
+    K c1 = B.matrix[first_id][first_id - 1] / std::sqrt(std::pow(B.matrix[first_id][first_id - 1], 2) + std::pow(B.matrix[second_id][first_id - 1], 2)); 
+    K c2 = B.matrix[second_id][first_id - 1] / std::sqrt(std::pow(B.matrix[first_id][first_id - 1], 2) + std::pow(B.matrix[second_id][first_id - 1], 2));
     for(size_t i = 0; i < A.matrix[0].size(); i++)
     {
-        A.matrix[num1][i] = c1*str1[i] +c2*str2[i];
-        A.matrix[num2][i] = -c2*str1[i] +c1*str2[i];
+        if (!transpose)
+        {
+            A.matrix[first_id][i] = c1 * first_row[i] + c2 * second_row[i];
+            A.matrix[second_id][i] = (-c2 * first_row[i]) + c1 * second_row[i];
+        }
+        else
+        {
+            A.matrix[first_id][i] = c1 * first_row[i] + (-c2 * second_row[i]);
+            A.matrix[second_id][i] = c2 * first_row[i] + c1 * second_row[i];
+        }
+    }
+}
+
+
+template<typename K>
+void Rotation(Matrix<K>& A, size_t first_id, size_t second_id, Matrix<K>& B, bool transpose)
+{
+    auto first_row = A.matrix[first_id];
+    auto second_row = A.matrix[second_id];
+    K c1 = B.matrix[first_id][first_id] / std::sqrt(std::pow(B.matrix[first_id][first_id], 2) + std::pow(B.matrix[second_id][first_id], 2)); 
+    K c2 = B.matrix[second_id][first_id] / std::sqrt(std::pow(B.matrix[first_id][first_id], 2) + std::pow(B.matrix[second_id][first_id], 2));
+    for(size_t i = 0; i < A.matrix[0].size(); i++)
+    {
+        if (!transpose)
+        {
+            A.matrix[first_id][i] = c1 * first_row[i] + c2 * second_row[i];
+            A.matrix[second_id][i] = (-c2 * first_row[i]) + c1 * second_row[i];
+        }
+        else
+        {
+            A.matrix[first_id][i] = c1 * first_row[i] + (-c2 * second_row[i]);
+            A.matrix[second_id][i] = c2 * first_row[i] + c1 * second_row[i];
+        }
     }
 }
 
@@ -969,17 +1016,17 @@ Matrix<T> Matrix<T>::reduction(size_t reduction_deg)
 
 
 template<typename T>
-std::pair<Matrix<T>, Matrix<T>> Matrix<T>::QR(Matrix<T> A)
+std::pair<Matrix<T>, Matrix<T>> Matrix<T>::QR(Matrix<T>& A)
 {
     auto Q = makeE<T>(A.matrix.size());
-
+    auto& temp = A;
     for (size_t i = 0; i < A.matrix.size() - 1; i++)
         for (size_t j = i + 1; j < A.matrix.size(); j++)
         {
             if (A.matrix[j][i])
             {
-                Rotation(Q, i, j, A);
-                Rotation(A, i, j, A);
+                Rotation(Q, i, j, A, false);
+                Rotation(A, i, j, A, false);
             }
             else
                 continue;
@@ -999,7 +1046,7 @@ Matrix<T> Matrix<T>::iterativeQR(Matrix<T> A)
     Matrix<T> answer(size, 1);
     while (size != 1)
     {
-        auto sigma = this->matrix[size - 1][size - 1];
+        auto sigma = A[size - 1][size - 1];
         auto E = makeE<T>(size);
         E.mulMatrixAndScalar(sigma);
         auto _A = A - E;
@@ -1019,7 +1066,7 @@ Matrix<T> Matrix<T>::iterativeQR(Matrix<T> A)
         
         if (continue_flag)
         {
-            A = temp;
+            A = temp; // A = A^k+1
             continue;
         }
         
@@ -1048,23 +1095,90 @@ Matrix<T> Matrix<T>::iterativeQR(Matrix<T> A)
 
 
 template<typename T>
-Matrix<T> Matrix<T>::makeHessenbergForm()
+void Matrix<T>::makeHessenbergForm(Matrix<T>& A)
 {
-
+    auto& temp = A;
+    for (size_t i = 1; i < A.matrix.size() - 1; i++)
+        for (size_t j = i + 1; j < A.matrix.size(); j++)
+        {
+            A.transpoce();
+            // std::ofstream test("test.txt");
+            if (A.matrix[j][i - 1])
+                RotationForHess(A, i, j, A, false);
+            else
+            {
+                // A.output(test);
+                continue;
+            }
+            // A.output(test);
+            A.transpoce();
+            if (A.matrix[j][i - 1])
+                RotationForHess(A, i, j, A, false);
+            else
+            {
+                // A.output(test);
+                continue;
+            }
+            // A.output(test);
+        }
 }
 
 
 template<typename T>
-std::pair<Matrix<T>, T> Matrix<T>::reverseIterationsMethod(bool rayleigh)
+std::pair<Matrix<T>, T> Matrix<T>::reverseIterationsMethod(bool rayleigh, Matrix<T>& A, Matrix<T> initial_approx, T lambda)
 {
-    std::pair<Matrix<T>, T> answer;
+    auto E = makeE<T>(A.matrix.size());
     if (rayleigh)
     {
-        
+        auto image = multiply(A, initial_approx);
+        lambda = scalarMul(image, initial_approx);
+        E.mulMatrixAndScalar(lambda);
+        auto temp_matrix = A - E;
+        auto linear_sys = makeExtendedMatrix<T>(temp_matrix, initial_approx);
+        if (!linear_sys.forwardGaussStep())
+        {
+            auto new_approx = linear_sys.backwardGaussStep();
+            new_approx.mulMatrixAndScalar(1 / eqlidNorm(new_approx));
+            while (eqlidNorm(new_approx - initial_approx) > epsilon)
+            {
+                for (int i = 0; i < E.matrix.size(); i++)
+                    E.matrix[i][i] = 1;
+                
+                auto temp = multiply(A, new_approx);
+                lambda = scalarMul(temp, new_approx);
+                auto new_matrix = A - E;
+                initial_approx = new_approx;
+                auto new_linear_sys = makeExtendedMatrix<T>(new_matrix, new_approx);
+                if (!new_linear_sys.forwardGaussStep())
+                {
+                    auto new_approx = new_linear_sys.backwardGaussStep();
+                    new_approx.mulMatrixAndScalar(1 / eqlidNorm(new_approx));
+                }
+            }
+        }
+        return std::make_pair(initial_approx, lambda);
     }
     else
     {
-        
+        E.mulMatrixAndScalar(lambda);
+        auto matrix = A - E;
+        auto linear_sys = makeExtendedMatrix<T>(matrix, initial_approx);
+        if (!linear_sys.forwardGaussStep())
+        {
+            auto new_approx = linear_sys.backwardGaussStep();
+            new_approx.mulMatrixAndScalar(1 / eqlidNorm(new_approx));
+            while (eqlidNorm(new_approx - initial_approx) > epsilon)
+            {
+                initial_approx = new_approx;
+                auto new_linear_sys = makeExtendedMatrix<T>(matrix, new_approx);
+                if (!new_linear_sys.forwardGaussStep())
+                {
+                    auto new_approx = new_linear_sys.backwardGaussStep();
+                    new_approx.mulMatrixAndScalar(1 / eqlidNorm(new_approx));
+                }
+            }
+        }
+        return std::make_pair(initial_approx, lambda);
     }
 }
 
