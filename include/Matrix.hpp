@@ -23,6 +23,13 @@ enum class IterativeMethod {
 };
 
 
+enum class ExitQRCriteria {
+    SIMPLE = 0,
+    MODULE,
+    SQUARE_MODULE
+};
+
+
 enum class Norm {
     octahedral = 1,
     spherical,
@@ -45,9 +52,11 @@ public:
     Matrix(size_t n, size_t m, std::filesystem::path filename);
     Matrix(size_t n, size_t m);
     Matrix(Matrix<T>& other);
+    Matrix(Matrix<T>&& other) noexcept: matrix(std::move(other.matrix)) {}
 
-    // Оператор присваивания
+    // Операторы присваивания
     Matrix<T>& operator=(Matrix<T>& other);
+    Matrix<T>& operator=(Matrix<T>&& other) noexcept;
 
     // Перегрузка операторов
     std::vector<T>& operator[](size_t index);
@@ -62,6 +71,7 @@ public:
     std::vector<T> getColumn(size_t index, size_t first_row_id = 0);
     T scalarMul(std::vector<T>& first, std::vector<T>& second);
     T scalarMul(Matrix<T>& first, Matrix<T>& second);
+    T vectorLength(Matrix<T>& vector);
     void transpoce();
     void mulRowAndScalar(size_t row_id, T scalar);
     void mulMatrixAndScalar(T scalar);
@@ -83,9 +93,12 @@ public:
     Matrix<T> iterativeQR(Matrix<T> A);
     void makeHessenbergForm(Matrix<T>& A);
     std::pair<Matrix<T>, Matrix<T>> QR(Matrix<T>& A);
-    std::pair<Matrix<T>, T> reverseIterationsMethod(bool rayleigh, Matrix<T>& A, Matrix<T> initial_approx, T lambda);
+    std::pair<Matrix<T>, T> reverseIterationsMethod(bool rayleigh, Matrix<T>& A, Matrix<T> initial_approx, T lambda, size_t* iter = nullptr);
 
     // Дружественные фунции
+
+    template<typename V>
+    friend void exitQRCriteria(Matrix<V>& A, bool& continue_flag, size_t const size, ExitQRCriteria condition);
 
     template<typename K>
     friend K eqlidNorm(Matrix<K> a);
@@ -207,6 +220,15 @@ Matrix<T>::Matrix(Matrix& other)
 }
 
 
+// Оператор перемещаения
+template<typename T>
+Matrix<T>&  Matrix<T>::operator=(Matrix<T>&& other) noexcept
+{
+    this->matrix = std::move(other.matrix);
+    return *this;
+}
+
+
 // Вывод матрицы в консоль.
 template<typename T>
 void Matrix<T>::output(std::ofstream& fout)
@@ -229,7 +251,7 @@ std::vector<T>& Matrix<T>::operator[](size_t index)
         return matrix[index];
     else
     {
-        //std::cout << "index of row out of range!\n\n";
+        std::cout << "index of row out of range!\n\n";
         exit(1);
     }
 }
@@ -283,6 +305,17 @@ T Matrix<T>::scalarMul(Matrix<T>& first, Matrix<T>& second)
         result += (first[i][0] * second[i][0]);
     }
     return result;
+}
+
+
+template<typename T>
+T Matrix<T>::vectorLength(Matrix<T>& vector)
+{
+    T sum = 0;
+    for (size_t i = 0; i < vector.matrix.size(); i++)
+        sum += std::pow(vector.matrix[i][0], 2);
+
+    return std::sqrt(sum);
 }
 
 
@@ -558,7 +591,7 @@ template<typename K>
 K eqlidNorm(Matrix<K> a)
 {
     K sum = 0;
-    for(int i = 0;i < a.matrix.size();i++)
+    for(int i = 0; i < a.matrix.size(); i++)
         sum += pow(a.matrix[i][0], 2);
 
     return sqrt(sum);
@@ -1038,39 +1071,91 @@ std::pair<Matrix<T>, Matrix<T>> Matrix<T>::QR(Matrix<T>& A)
 }
 
 
-template<typename T>
-Matrix<T> Matrix<T>::iterativeQR(Matrix<T> A)
+template<typename V>
+void exitQRCriteria(Matrix<V>& A, bool& continue_flag, size_t const size, ExitQRCriteria condition)
 {
-    static double eps = 10e-6;
-    double size = this->matrix.size();
-    Matrix<T> answer(size, 1);
-    while (size != 1)
+    switch (condition)
     {
-        auto sigma = A[size - 1][size - 1];
-        auto E = makeE<T>(size);
-        E.mulMatrixAndScalar(sigma);
-        auto _A = A - E;
-        auto QR = _A.QR(_A);
-        auto temp = multiply(QR.first, QR.second) + E;
-        auto last_row = temp[size - 1];
+    case ExitQRCriteria::SIMPLE:
+    {
+        auto last_row = A.operator[](size - 1);
 
         // Флаг - true, если точность
         // В последней строке еще не достигнута
-        bool continue_flag = false;
         for (size_t i = 0; i < size - 1; i++)
-            if (std::abs(last_row[i]) > eps)
+            if (std::abs(last_row[i]) > epsilon)
             {
                 continue_flag = true;
-                break;
+                return;
             }
+        return;
+    }
+    case ExitQRCriteria::MODULE:
+    {
+        V sum = 0;
+        for (size_t i = 0; i < size; i++)
+        {
+            for (size_t j = 0; j < i; j++)
+            {
+                sum += std::abs(A.matrix[i][j]);
+            }
+        }
+        if (sum < epsilon)
+            continue_flag = true;
         
+        return;
+    }
+    case ExitQRCriteria::SQUARE_MODULE:
+    {
+        V sum = 0;
+        for (size_t i = 0; i < size; i++)
+        {
+            for (size_t j = 0; j < i; j++)
+            {
+                sum += std::pow(std::abs(A.matrix[i][j]), 2);
+            }
+        }
+        if (sum < epsilon)
+            continue_flag = true;
+        
+        return;
+    }
+    default:
+    {
+        std::cout << "\nУсловие выхода из итерационного метода QR - некорректно!\n";
+        exit(1);
+    }
+    }
+}
+
+
+template<typename T>
+Matrix<T> Matrix<T>::iterativeQR(Matrix<T> A)
+{
+    // static double eps = 10e-6;
+    size_t size = this->matrix.size();
+    Matrix<T> answer(size, 1);
+    while (size != 1)
+    {
+        // auto sigma = A[size - 1][size - 1];
+        auto sigma = 0;
+        auto E = makeE<T>(size);
+        E.mulMatrixAndScalar(sigma);
+        A = A - E;
+        auto QR = A.QR(A);
+        auto temp = multiply(QR.first, QR.second) + E;
+
+        bool continue_flag = false;
+        
+        exitQRCriteria(temp, continue_flag, size, ExitQRCriteria::SIMPLE);
+
         if (continue_flag)
         {
             A = temp; // A = A^k+1
             continue;
         }
         
-        answer.matrix[size - 1][0] = last_row[size - 1];
+        answer.matrix[size - 1][0] = temp[size - 1][size - 1];
         auto newA = temp.reduction(1);
 
         // Берем угловой минор на порядок меньше
@@ -1102,59 +1187,56 @@ void Matrix<T>::makeHessenbergForm(Matrix<T>& A)
         for (size_t j = i + 1; j < A.matrix.size(); j++)
         {
             A.transpoce();
-            // std::ofstream test("test.txt");
             if (A.matrix[j][i - 1])
                 RotationForHess(A, i, j, A, false);
             else
-            {
-                // A.output(test);
                 continue;
-            }
-            // A.output(test);
             A.transpoce();
             if (A.matrix[j][i - 1])
                 RotationForHess(A, i, j, A, false);
             else
-            {
-                // A.output(test);
                 continue;
-            }
-            // A.output(test);
         }
 }
 
 
 template<typename T>
-std::pair<Matrix<T>, T> Matrix<T>::reverseIterationsMethod(bool rayleigh, Matrix<T>& A, Matrix<T> initial_approx, T lambda)
+std::pair<Matrix<T>, T> Matrix<T>::reverseIterationsMethod(bool rayleigh, Matrix<T>& A, Matrix<T> initial_approx, T lambda, size_t* iter)
 {
     auto E = makeE<T>(A.matrix.size());
     if (rayleigh)
     {
-        auto image = multiply(A, initial_approx);
-        lambda = scalarMul(image, initial_approx);
+        auto image = multiply(A, initial_approx);                                           // image       = Ax
+        lambda = (scalarMul(image, initial_approx) / eqlidNorm(initial_approx));            // lambda      = (Ax, x) / (x, x)
         E.mulMatrixAndScalar(lambda);
-        auto temp_matrix = A - E;
+        auto temp_matrix = A - E;                                                           // temp_matrix = A - lambda * E
+
+        // Создается расширенная матрица системы для метода Гаусса
         auto linear_sys = makeExtendedMatrix<T>(temp_matrix, initial_approx);
         if (!linear_sys.forwardGaussStep())
         {
-            auto new_approx = linear_sys.backwardGaussStep();
-            new_approx.mulMatrixAndScalar(1 / eqlidNorm(new_approx));
-            while (eqlidNorm(new_approx - initial_approx) > epsilon)
+            auto new_approx = linear_sys.backwardGaussStep();                      // y^k+1
+            new_approx.mulMatrixAndScalar(1 / eqlidNorm(new_approx));              // x^k+1 = y^k+1 / || y^k+1 ||
+            while ((1.0 - std::abs(scalarMul(new_approx, initial_approx) / (vectorLength(new_approx) * vectorLength(initial_approx)))) > epsilon)
             {
+                if (iter)
+                    (*iter)++;
                 for (int i = 0; i < E.matrix.size(); i++)
                     E.matrix[i][i] = 1;
                 
-                auto temp = multiply(A, new_approx);
-                lambda = scalarMul(temp, new_approx);
-                auto new_matrix = A - E;
+                image = multiply(A, new_approx);                                   // image  = A*x^k
+                lambda = (scalarMul(image, new_approx) / eqlidNorm(new_approx));   // lambda = (A*x^k, x^k) / (x^k, x^k)
+                E.mulMatrixAndScalar(lambda);
+                temp_matrix = A - E;
                 initial_approx = new_approx;
-                auto new_linear_sys = makeExtendedMatrix<T>(new_matrix, new_approx);
-                if (!new_linear_sys.forwardGaussStep())
+                linear_sys = makeExtendedMatrix<T>(temp_matrix, new_approx);
+                if (!linear_sys.forwardGaussStep())
                 {
-                    auto new_approx = new_linear_sys.backwardGaussStep();
+                    new_approx = linear_sys.backwardGaussStep();
                     new_approx.mulMatrixAndScalar(1 / eqlidNorm(new_approx));
                 }
             }
+            initial_approx = new_approx;
         }
         return std::make_pair(initial_approx, lambda);
     }
@@ -1167,20 +1249,20 @@ std::pair<Matrix<T>, T> Matrix<T>::reverseIterationsMethod(bool rayleigh, Matrix
         {
             auto new_approx = linear_sys.backwardGaussStep();
             new_approx.mulMatrixAndScalar(1 / eqlidNorm(new_approx));
-            while (eqlidNorm(new_approx - initial_approx) > epsilon)
+            while ((1 - std::abs(scalarMul(new_approx, initial_approx) / (vectorLength(new_approx) * vectorLength(initial_approx)))) > epsilon)
             {
+                if (iter)
+                    (*iter)++;
                 initial_approx = new_approx;
-                auto new_linear_sys = makeExtendedMatrix<T>(matrix, new_approx);
-                if (!new_linear_sys.forwardGaussStep())
+                linear_sys = makeExtendedMatrix<T>(matrix, new_approx);
+                if (!linear_sys.forwardGaussStep())
                 {
-                    auto new_approx = new_linear_sys.backwardGaussStep();
+                    new_approx = linear_sys.backwardGaussStep();
                     new_approx.mulMatrixAndScalar(1 / eqlidNorm(new_approx));
                 }
             }
+            initial_approx = new_approx;
         }
         return std::make_pair(initial_approx, lambda);
     }
 }
-
-
-

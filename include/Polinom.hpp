@@ -11,7 +11,7 @@ class InterpolationPolinom
 {
 private:
     std::vector<std::pair<T, T>> table;
-    std::vector<T> polinom_coeffs;
+    std::vector<T> polinom_coeffs; 
 
 public:
 
