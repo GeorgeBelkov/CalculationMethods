@@ -7,16 +7,16 @@ using type_t = double;
 template<typename V>
 V testFunction(V x)
 {
-    // return 1.0 / std::atan(1 + 10 * std::pow(x, 2));
+    return 1.0 / std::atan(1 + 10 * std::pow(x, 2));
     // return 1.0 / (1 + std::pow(x, 2));
-    return std::pow(x, 2);
+    // return std::pow(x, 2);
 }
 
 
 int main()
 {
-    std::pair<type_t, type_t> uniform_segment(-1, 1);
-    std::pair<type_t, type_t> chebyshev_segment(-1, 1);
+    std::pair<type_t, type_t> uniform_segment(-3, 3);
+    std::pair<type_t, type_t> chebyshev_segment(-3, 3);
     Grid<type_t> uniform_grid(NODES_COUNT, uniform_segment, GridType::UNIFORM);
     Grid<type_t> chebyshev_grid(NODES_COUNT, chebyshev_segment, GridType::CHEBYSHEVSKAYA);
 

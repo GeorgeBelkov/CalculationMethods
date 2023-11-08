@@ -13,7 +13,7 @@ void makeGrid(std::vector<double>& nodes, std::pair<double, double> segment, siz
     int iter = 0;
     for (auto& node : nodes)
     {
-        node = dist + iter * dist;
+        node = segment.first + iter * dist;
         iter++;
     }
 }

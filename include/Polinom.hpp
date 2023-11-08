@@ -7,7 +7,8 @@
 #include <algorithm>
 
 
-constexpr static size_t NODES_COUNT = 5;
+constexpr static size_t NODES_COUNT = 7;
+constexpr static double epsilon = 1e-8;
 
 
 template<typename T>
@@ -95,7 +96,7 @@ Grid<T>::Grid(size_t nodes_count, std::pair<T, T> segment, GridType grid_tp)
         std::vector<T> chebyshev_nodes;
         for (size_t k = 0; k < nodes_count; k++)
         {
-            auto chebyshev_node = std::cos(((2 * k - 1) * M_PI) / (2 * nodes_count));
+            auto chebyshev_node = std::cos(((2 * (k + 1) - 1) * M_PI) / (2 * nodes_count));
             grid[k] = (0.5 * (segment.first + segment.second) + 0.5 * (segment.second - segment.first) * chebyshev_node);
         }
         std::sort(grid.begin(), grid.end());
@@ -253,7 +254,11 @@ V getCoeff(Grid<V> const& grid, uint16_t polinom_deg, uint16_t number, size_t ex
     } while (std::prev_permutation(bitmask.begin(), bitmask.end()));
 
     // Возвращаем сумму (то есть коэффицент) при (polinom_deg - number) степени.
-    return std::accumulate(combinations.begin(), combinations.end(), 1);
+    V sum = 0;
+    for (auto& elem : combinations)
+        if (std::abs(elem) > epsilon)
+            sum += elem;
+    return sum;
 }
 
 
@@ -282,13 +287,16 @@ void LagrangeInterpolation(Polinom<V>& Lagrange_polinom, Grid<V> const& grid, In
         
 
         // заполняем ее коэффиценты
-        base_function.polinom_coeffs[0] *= (1 / multiplier) * table.table[0].second;
-        base_function.polinom_coeffs[1] = (-(1 / multiplier) * sum * table.table[1].second);
+        base_function.polinom_coeffs[0] *= (1 / multiplier) * table.table[k].second;
+        base_function.polinom_coeffs[1] *= (-(1 / multiplier) * sum * table.table[k].second);
         for (size_t i = 2; i < polinom_deg; i++)
             // i-й коэффицент = (-1)^i * множитель * сумму комбинаций.
-            base_function.polinom_coeffs[i] = std::pow(-1, i) * (1 / multiplier) * getCoeff<V>(grid, polinom_deg, i, k) * table.table[i].second;
+            base_function.polinom_coeffs[i] *= std::pow(-1, i) * (1 / multiplier) * getCoeff<V>(grid, polinom_deg, i, k) * table.table[k].second;
         
         for (size_t i = 0; i < polinom_deg; i++)
             Lagrange_polinom.polinom_coeffs[i] += base_function.polinom_coeffs[i];
     }
+    for (auto& elem : Lagrange_polinom.polinom_coeffs)
+        if (std::abs(elem) < epsilon)
+            elem = 0;
 }
