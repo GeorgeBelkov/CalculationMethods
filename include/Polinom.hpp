@@ -180,7 +180,7 @@ public:
 
     // Комбинирует индексы от 0 до polinom_deg с помощью ф-лы: C из polinom_deg по number
     template<typename V>
-    friend V getCoeff(Grid<V> const& grid, uint16_t polinom_deg, uint16_t number);
+    friend V getCoeff(Grid<V> const& grid, uint16_t polinom_deg, uint16_t number, size_t excluded);
 
     template<typename V>
     friend void LagrangeInterpolation(Polinom<V>& Lagrange_polinom, Grid<V> const& grid, InterpolationTable<V> const& table);
@@ -222,7 +222,7 @@ void Polinom<T>::print() const
 
 
 template<typename V>
-V getCoeff(Grid<V> const& grid, uint16_t polinom_deg, uint16_t number)
+V getCoeff(Grid<V> const& grid, uint16_t polinom_deg, uint16_t number, size_t excluded)
 {
     // Хранит всевозможные комбинации произведений длины number
     std::vector<V> combinations;
@@ -230,13 +230,26 @@ V getCoeff(Grid<V> const& grid, uint16_t polinom_deg, uint16_t number)
     // Битмаска
     std::string bitmask(number, 1);
     bitmask.resize(polinom_deg + 1, 0);
+    auto grid_copy = grid.getGrid();
     
     do {
         V combination = 1;
+        bool push_flag = true;
         for (size_t i = 0; i <= polinom_deg; ++i)
-            if (bitmask[i]) combination *= grid.getGrid()[i];
+            if (bitmask[i])
+            {
+                if (i == excluded)
+                {
+                    push_flag = false;
+                    break;
+                }
+                combination *= grid_copy[i];
+            }
 
-        combinations.push_back(combination);
+        if (push_flag)
+            combinations.push_back(combination);
+        
+
     } while (std::prev_permutation(bitmask.begin(), bitmask.end()));
 
     // Возвращаем сумму (то есть коэффицент) при (polinom_deg - number) степени.
@@ -259,19 +272,23 @@ void LagrangeInterpolation(Polinom<V>& Lagrange_polinom, Grid<V> const& grid, In
         auto& base_function = basic_functions[k];
         base_function.polinom_coeffs.resize(polinom_deg, 1);
         
-        V multiplier = 1;
-        for (size_t i = 0; ((i != k) && (i < polinom_deg)); i++)
-            multiplier *= (grid_copy[k] - grid_copy[i]);
+        V multiplier = 1, sum = 0;
+        for (size_t i = 0; i < polinom_deg; i++)
+            if (i != k)
+            {
+                multiplier *= (grid_copy[k] - grid_copy[i]);
+                sum += grid_copy[i];
+            }
         
 
         // заполняем ее коэффиценты
-        base_function.polinom_coeffs[0] *= multiplier * table.table[polinom_deg - 1].second;
-        base_function.polinom_coeffs[1] = ((-multiplier) * std::accumulate(grid_copy.begin(), grid_copy.end(), 1) * table.table[polinom_deg - 2].second);
+        base_function.polinom_coeffs[0] *= (1 / multiplier) * table.table[0].second;
+        base_function.polinom_coeffs[1] = (-(1 / multiplier) * sum * table.table[1].second);
         for (size_t i = 2; i < polinom_deg; i++)
             // i-й коэффицент = (-1)^i * множитель * сумму комбинаций.
-            base_function.polinom_coeffs[i] = std::pow(-1, i) * multiplier * getCoeff<V>(grid, polinom_deg, i) * table.table[polinom_deg - (i + 1)].second;
+            base_function.polinom_coeffs[i] = std::pow(-1, i) * (1 / multiplier) * getCoeff<V>(grid, polinom_deg, i, k) * table.table[i].second;
         
-        for (size_t i = 0; i < Lagrange_polinom.polinom_coeffs.size(); i++)
+        for (size_t i = 0; i < polinom_deg; i++)
             Lagrange_polinom.polinom_coeffs[i] += base_function.polinom_coeffs[i];
     }
 }
