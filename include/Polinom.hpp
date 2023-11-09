@@ -1,3 +1,5 @@
+#pragma once
+
 #include <cmath>
 #include <vector>
 #include <string>
@@ -7,18 +9,57 @@
 #include <algorithm>
 
 
-constexpr static size_t NODES_COUNT = 7;
+constexpr static size_t NODES_COUNT = 8;
 constexpr static double epsilon = 1e-8;
 
 
 template<typename T>
 class Grid;
 
+template<typename T>
+struct InterpolationTable;
+
 
 enum class GridType {
     UNIFORM = 0,
     CHEBYSHEVSKAYA
 };
+
+
+// Функция возвращает прогоночные коэффиценты alpha[i], betta[i] для нахождения c_i в кубическом сплайне.
+template<typename V>
+std::pair<V, V> getRunThroughCoeffs(InterpolationTable<V> const& table, std::vector<std::pair<V, V>> const& coeffs, size_t index)
+{
+    // можно оптимальнее (избавиться от двух аддитивных и двух мультипликативных)
+    // g_i and g_(i-1)
+    auto g_i = (table.table[index].second - table.table[index - 1].second) / (table.table[index].first - table.table[index - 1].first);
+    auto g_i_prev = (table.table[index - 1].second - table.table[index - 2].second) / (table.table[index - 1].first - table.table[index - 2].first);
+    if (index == 2)
+    {
+        auto alpha = (table.table[index].first - table.table[index - 1].first) / (-2 * (table.table[index].first - table.table[index - 2].first));
+        auto betta = (3 * (g_i - g_i_prev)) / (2 * (table.table[index].first - table.table[index - 2].first));
+
+        return std::make_pair(alpha, betta);
+    }
+    else if (index == table.table.size() - 1)
+    {
+        auto betta = (-3 * (g_i - g_i_prev) + (table.table[index - 1].first - table.table[index - 2].first) * coeffs[index - 3].second) /
+                     (-2 * (table.table[index].first - table.table[index - 2].first) -
+                      (table.table[index - 1].first - table.table[index - 2].first) * coeffs[index - 3].first);
+        return std::make_pair(0, betta);
+    }
+    else
+    {
+        auto alpha = (table.table[index].first - table.table[index - 1].first) /
+                     (-2 * (table.table[index].first - table.table[index - 2].first) -
+                      (table.table[index - 1].first - table.table[index - 2].first) * coeffs[index - 3].first);
+
+        auto betta = (-3 * (g_i - g_i_prev) + (table.table[index - 1].first - table.table[index - 2].first) * coeffs[index - 3].second) /
+                     (-2 * (table.table[index].first - table.table[index - 2].first) +
+                      -1 * (table.table[index - 1].first - table.table[index - 2].first) * coeffs[index - 3].first);
+        return std::make_pair(alpha, betta);
+    }
+}
 
 
 template<typename T>
@@ -175,6 +216,7 @@ public:
 
     // Методы класса
     void print() const;
+    void printSpline() const;
 
 
     // Дружественные функции класса
@@ -187,7 +229,7 @@ public:
     friend void LagrangeInterpolation(Polinom<V>& Lagrange_polinom, Grid<V> const& grid, InterpolationTable<V> const& table);
 
     template<typename V>
-    friend std::vector<Polinom<V>> SplineInterpolation();
+    friend void CubicSplineInterpolation(std::vector<Polinom<V>>& spline, InterpolationTable<V> const& table);
 
 };
 
@@ -213,12 +255,33 @@ Polinom<T>& Polinom<T>::operator=(Polinom<T>&& other) noexcept
 template<typename T>
 void Polinom<T>::print() const
 {
-    static std::ofstream fout("InterpolationInfo.txt");
+    static std::ofstream fout("LagrangeInterpolationInfo.txt");
 
     for (auto& coeff : polinom_coeffs)
         fout << coeff << " ";
 
     fout << "\n\n";
+}
+
+
+template<typename T>
+void Polinom<T>::printSpline() const
+{
+    static std::ofstream fout("SplineInterpolationInfo.txt");
+    static size_t id = 1;
+
+    fout << id << ": ";
+    for (auto& coeff : polinom_coeffs)
+        fout << coeff << " ";
+    fout << "\n";
+
+    id++;
+    if (id == NODES_COUNT)
+    {
+        id = 1;
+        fout << "\n\n";
+    }
+    
 }
 
 
@@ -299,4 +362,50 @@ void LagrangeInterpolation(Polinom<V>& Lagrange_polinom, Grid<V> const& grid, In
     for (auto& elem : Lagrange_polinom.polinom_coeffs)
         if (std::abs(elem) < epsilon)
             elem = 0;
+}
+
+
+template<typename V>
+void CubicSplineInterpolation(std::vector<Polinom<V>>& spline, InterpolationTable<V> const& table)
+{
+    std::vector<std::pair<V, V>> coeffs;
+    for (size_t i = 2; i < table.table.size(); i++)
+        coeffs.push_back(getRunThroughCoeffs(table, coeffs, i));
+
+    short j = -1;
+    for (size_t i = table.table.size() - 1; i > 0; i--, j++)
+    {
+        Polinom<V> cubic_polinom;
+        cubic_polinom.polinom_coeffs.resize(4);
+
+        auto g_i = (table.table[i].second - table.table[i - 1].second) / (table.table[i].first - table.table[i - 1].first);
+        auto h_i = table.table[i].first - table.table[i - 1].first;
+
+        V a_i = table.table[i - 1].second, c_i, b_i, d_i;
+        if (i == table.table.size() - 1)
+        {
+            c_i = coeffs[i - 2].second;
+            b_i = g_i - (2 * c_i * h_i) / 3;
+            d_i = (-c_i) / (3 * h_i);
+        }
+        else
+        {
+            c_i = coeffs[i - 2].first * spline[j].polinom_coeffs[1] + coeffs[i - 2].second;
+            b_i = g_i - ((spline[j].polinom_coeffs[1] + 2 * c_i) * h_i) / 3;
+            d_i = (spline[j].polinom_coeffs[1] - c_i) / (3 * h_i);
+        }
+
+        // устанавливаем коэффиценты полинома
+        cubic_polinom.polinom_coeffs[0] = d_i;
+        cubic_polinom.polinom_coeffs[1] = c_i;
+        cubic_polinom.polinom_coeffs[2] = b_i;
+        cubic_polinom.polinom_coeffs[3] = a_i;
+
+        for (auto& elem : cubic_polinom.polinom_coeffs)
+            if (std::abs(elem) < epsilon)
+                elem = 0;
+
+        spline.push_back(cubic_polinom);
+    }
+    std::reverse(spline.begin(), spline.end());
 }
