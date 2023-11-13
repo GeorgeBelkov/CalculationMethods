@@ -9,7 +9,7 @@
 #include <algorithm>
 
 
-constexpr static size_t NODES_COUNT = 8;
+constexpr static size_t NODES_COUNT = 10;
 constexpr static double epsilon = 1e-8;
 
 
@@ -77,9 +77,17 @@ struct InterpolationTable
     void printTable() const
     {
         static std::ofstream table_fout("tableInfo.txt");
+        static bool is_closed = false;
+
+        if (is_closed)
+            table_fout.open("tableInfo.txt", std::ios::out);
+
         for (auto& pair : table)
-            table_fout << "x: " << pair.first << "; y: " << pair.second << "\n";
+            table_fout << "x: " << pair.first << " y: " << pair.second << "\n";
         table_fout << "\n\n";
+
+        table_fout.close();
+        is_closed = true;
     }
 };
 
@@ -256,11 +264,24 @@ template<typename T>
 void Polinom<T>::print() const
 {
     static std::ofstream fout("LagrangeInterpolationInfo.txt");
+    static bool is_closed = false;
 
-    for (auto& coeff : polinom_coeffs)
-        fout << coeff << " ";
+    if (is_closed)
+        fout.open("LagrangeInterpolationInfo.txt", std::ios::out);
+    
+
+    for (size_t i = 0; i < polinom_coeffs.size(); i++)
+    {
+        if (i == polinom_coeffs.size() - 1)
+            fout << polinom_coeffs[i];
+        else
+            fout << polinom_coeffs[i] << " ";
+    }
 
     fout << "\n\n";
+
+    fout.close();
+    is_closed = true;
 }
 
 
@@ -269,10 +290,20 @@ void Polinom<T>::printSpline() const
 {
     static std::ofstream fout("SplineInterpolationInfo.txt");
     static size_t id = 1;
+    static bool is_closed = false;
+
+    if (is_closed)
+        fout.open("SplineInterpolationInfo.txt", std::ios::out);
 
     fout << id << ": ";
-    for (auto& coeff : polinom_coeffs)
-        fout << coeff << " ";
+    for (size_t i = 0; i < polinom_coeffs.size(); i++)
+    {
+        if (i == polinom_coeffs.size() - 1)
+            fout << polinom_coeffs[i];
+        else
+            fout << polinom_coeffs[i] << " ";
+    }
+    
     fout << "\n";
 
     id++;
@@ -280,8 +311,9 @@ void Polinom<T>::printSpline() const
     {
         id = 1;
         fout << "\n\n";
+        fout.close();
+        is_closed = true;
     }
-    
 }
 
 
