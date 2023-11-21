@@ -36,10 +36,10 @@ V testFunction(V x)
 {
     // return std::pow(x, 2);                                                                                                               //  +
     // return 1.0 / (1 + std::pow(x, 2));                                                                                                   //  +
-    // return 1.0 / std::atan(1 + 10 * std::pow(x, 2));                                                                                     //  +
+    return 1.0 / std::atan(1 + 10 * std::pow(x, 2));                                                                                     //  +
     // return std::pow(4 * std::pow(x, 3) + 2 * std::pow(x, 2) - 4 * x + 2, std::sqrt(2)) + std::asin(1 / (5 + x - std::pow(x, 2))) - 5;    //  +
     // return 1.0 / (1 + 25 * std::pow(x, 2));                                                                                                 +
-    return std::sin(x);
+    // return std::sin(x);
     // return complexFunction(x);
 }
 
@@ -74,13 +74,13 @@ void interpolant(std::function<V(V)>const& func, std::pair<V, V> segment)
 
 int main()
 {
-    Task task = Task::MAIN_LAGRANGE_UNIFORM;
+    Task task = Task::ADDITIONAL2;
     std::string bash_command;
     switch (task)
     {
     case Task::MAIN_LAGRANGE_UNIFORM:
     {
-        std::pair<type_t, type_t> uniform_segment(0, 10);
+        std::pair<type_t, type_t> uniform_segment(-1, 1);
         Grid<type_t> uniform_grid(NODES_COUNT, uniform_segment, GridType::UNIFORM);
 
         interpolant<type_t>(testFunction<type_t>, uniform_segment);
@@ -93,9 +93,11 @@ int main()
         // Вывод получившейся таблицы в файл.
         uniform_grid_table.printTable();
 
-        Polinom<type_t> Lagrange_with_uniform_grid(NODES_COUNT - 1);
-        LagrangeInterpolation<type_t>(Lagrange_with_uniform_grid, uniform_grid, uniform_grid_table);
-        Lagrange_with_uniform_grid.print();
+        // Polinom<type_t> Lagrange_with_uniform_grid(NODES_COUNT - 1);
+        // LagrangeInterpolation<type_t>(Lagrange_with_uniform_grid, uniform_grid, uniform_grid_table);
+        // Lagrange_with_uniform_grid.print();
+        
+        LagrangeInterpolationFake(uniform_grid, uniform_grid_table);
         
         bash_command = "python3 plotter.py lagrange";
 
@@ -116,9 +118,11 @@ int main()
         // Вывод получившейся таблицы в файл.
         chebyshev_grid_table.printTable();
 
-        Polinom<type_t> Lagrange_with_chebyshev_grid(NODES_COUNT - 1);
-        LagrangeInterpolation<type_t>(Lagrange_with_chebyshev_grid, chebyshev_grid, chebyshev_grid_table);
-        Lagrange_with_chebyshev_grid.print();
+        // Polinom<type_t> Lagrange_with_chebyshev_grid(NODES_COUNT - 1);
+        // LagrangeInterpolation<type_t>(Lagrange_with_chebyshev_grid, chebyshev_grid, chebyshev_grid_table);
+        // Lagrange_with_chebyshev_grid.print();
+
+        LagrangeInterpolationFake(chebyshev_grid, chebyshev_grid_table);
         
         bash_command = "python3 plotter.py lagrange";
 
@@ -230,7 +234,7 @@ int main()
     }
     case Task::ADDITIONAL2:
     {
-        std::pair<type_t, type_t> uniform_segment(-10, 10);
+        std::pair<type_t, type_t> uniform_segment(-1, 1);
         Grid<type_t> uniform_grid(NODES_COUNT, uniform_segment, GridType::UNIFORM);
         InterpolationTable<type_t> uniform_grid_table(uniform_grid, constant<type_t>);
 
@@ -242,11 +246,11 @@ int main()
         // Вывод получившейся таблицы в файл.
         uniform_grid_table.printTable();
 
-        Polinom<type_t> Lagrange_with_uniform_grid(NODES_COUNT - 1);
+        // Polinom<type_t> Lagrange_with_uniform_grid(NODES_COUNT - 1);
+        // LagrangeInterpolation<type_t>(Lagrange_with_uniform_grid, uniform_grid, uniform_grid_table);
+        // Lagrange_with_uniform_grid.print();
 
-        LagrangeInterpolation<type_t>(Lagrange_with_uniform_grid, uniform_grid, uniform_grid_table);
-
-        Lagrange_with_uniform_grid.print();
+        LagrangeInterpolationFake(uniform_grid, uniform_grid_table);
 
         bash_command = "python3 plotter.py lagrange";
 

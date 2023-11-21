@@ -9,7 +9,7 @@
 #include <algorithm>
 
 
-constexpr static size_t NODES_COUNT = 10;
+constexpr static size_t NODES_COUNT = 200;
 constexpr static double epsilon = 1e-8;
 
 
@@ -237,6 +237,9 @@ public:
     friend void LagrangeInterpolation(Polinom<V>& Lagrange_polinom, Grid<V> const& grid, InterpolationTable<V> const& table);
 
     template<typename V>
+    friend void LagrangeInterpolationFake(Grid<V> const& grid, InterpolationTable<V> const& table);
+
+    template<typename V>
     friend void CubicSplineInterpolation(std::vector<Polinom<V>>& spline, InterpolationTable<V> const& table);
 
 };
@@ -394,6 +397,44 @@ void LagrangeInterpolation(Polinom<V>& Lagrange_polinom, Grid<V> const& grid, In
     for (auto& elem : Lagrange_polinom.polinom_coeffs)
         if (std::abs(elem) < epsilon)
             elem = 0;
+}
+
+
+template<typename V>
+void LagrangeInterpolationFake(Grid<V> const& grid, InterpolationTable<V> const& table)
+{
+    constexpr static size_t ITERS = 1000;
+    static std::ofstream fout("FakeLagrangeInfo.txt");
+    auto dist = std::abs(grid.getGrid()[0] - grid.getGrid()[grid.getGrid().size() - 1]) / (ITERS - 1);
+    for (size_t i = 0; i < ITERS; i++)
+    {
+        auto x = (grid.getGrid()[0] + i * dist);
+        std::vector<V> base_funcktions_results;
+        size_t iterations = 0;
+        for (auto& node : grid.getGrid())
+        {
+            V numerator = 1, denumerator = 1;
+            for (size_t j = 0; j < grid.getGrid().size(); j++)
+            {
+                if (grid.getGrid()[j] != node)
+                {
+                    numerator *= (x - grid.getGrid()[j]);
+                    denumerator *= (node - grid.getGrid()[j]);
+                }
+            }
+            base_funcktions_results.push_back((numerator / denumerator) * table.table[iterations].second);
+            // std::cout << base_funcktions_results[iterations] << " ";
+            ++iterations;
+        }
+        // std::cout << "\n";
+
+        V y = 0;
+        for (auto& elem : base_funcktions_results)
+            y += elem;
+        
+        fout << x << " " << y << "\n";
+    }
+    fout.close();
 }
 
 
