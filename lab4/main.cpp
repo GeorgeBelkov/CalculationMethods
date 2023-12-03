@@ -9,7 +9,7 @@ static constexpr size_t ETTA_NODES_NUM = 25;
 
 void makeGrid(std::vector<double>& nodes, std::pair<double, double> segment, size_t nodes_number)
 {
-    auto dist = std::abs(segment.first - segment.second) / nodes_number;
+    auto dist = std::abs(segment.first - segment.second) / (nodes_number - 1);
     int iter = 0;
     for (auto& node : nodes)
     {

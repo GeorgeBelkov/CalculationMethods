@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.11)
+project(lab5)
+set(CMAKE_CXX_STANDARD 20)
+target_include_directories(lab5 PUBLIC include)
+target_link_libraries(lab5 calc_met_lib)
+add_library(lab5 STATIC main.cpp)
